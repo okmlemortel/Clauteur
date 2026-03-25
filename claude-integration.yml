@@ -1,0 +1,60 @@
+name: Intégration composants Claude.ai
+
+on:
+  push:
+    branches: [main, claude-contributions]
+    paths:
+      - 'pending/lessons/**'
+
+jobs:
+  notify-cowork:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lire le brief
+        id: brief
+        run: |
+          if [ -f "pending/lessons/BRIEF.md" ]; then
+            BRIEF=$(cat pending/lessons/BRIEF.md)
+            echo "brief<<EOF" >> $GITHUB_OUTPUT
+            echo "$BRIEF" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "brief=Nouveau composant sans brief — vérifier /pending/lessons/" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Lister les nouveaux composants
+        id: components
+        run: |
+          COMPONENTS=$(find pending/lessons -name "*.jsx" -o -name "*.tsx" | head -20 | tr '\n' ', ')
+          echo "components=$COMPONENTS" >> $GITHUB_OUTPUT
+
+      - name: Créer issue pour Cowork
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const brief = `${{ steps.brief.outputs.brief }}`;
+            const components = `${{ steps.components.outputs.components }}`;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🎓 Nouveau composant pédagogique — Claude.ai [${new Date().toISOString().split('T')[0]}]`,
+              body: `## Composants à intégrer\n\n\`\`\`\n${components}\n\`\`\`\n\n## Brief d'intégration\n\n${brief}\n\n## Instructions\n1. Intégrer dans \`/frontend/components/lessons/\`\n2. Utiliser les props standard (voir CONTEXT.md)\n3. Tester sur mobile\n4. Déployer sur Railway\n5. Fermer cette issue + mettre à jour COMMUNICATION.md\n\n---\n*Généré automatiquement par GitHub Actions*`,
+              labels: ['claude-component', 'cowork-action', 'pedagogy']
+            });
+
+      - name: Mettre à jour COMMUNICATION.md
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          COMPONENTS=$(find pending/lessons -name "*.jsx" -o -name "*.tsx" | head -5 | tr '\n' ', ')
+
+          # Insérer une nouvelle entrée dans la section EN ATTENTE
+          sed -i "s/## 🔴 EN ATTENTE D'ACTION/## 🔴 EN ATTENTE D'ACTION\n\n### [$DATE] — Claude.ai → Cowork\n**Tâche** : Intégrer nouveau(x) composant(s) pédagogique(s)\n**Fichiers** : $COMPONENTS\n**Instructions** : Voir issue GitHub + BRIEF.md dans \/pending\/lessons\/\n**Statut** : ⏳ En attente/" .claude/COMMUNICATION.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .claude/COMMUNICATION.md
+          git commit -m "chore: mise à jour COMMUNICATION.md — nouveau composant Claude.ai [$DATE]" || echo "Rien à commiter"
+          git push

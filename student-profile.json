@@ -1,0 +1,114 @@
+{
+  "meta": {
+    "version": "0.1",
+    "last_updated": "2026-03-26",
+    "updated_by": "initialization",
+    "note": "Profil initial — sera enrichi après les premières sessions de diagnostic"
+  },
+
+  "identity": {
+    "internal_code": "STUDENT_001",
+    "age": 13,
+    "grade": "8th grade",
+    "languages": ["français", "anglais"],
+    "interests": ["jeux", "sport", "musique", "cuisine"]
+  },
+
+  "cognitive_profile": {
+    "justification_stage": {
+      "current": 1,
+      "description": "Justification absente ou circulaire",
+      "scale": {
+        "1": "Pas de justification — réponse sans explication",
+        "2": "Justification procédurale — décrit ce qu'elle a fait",
+        "3": "Justification conceptuelle — explique pourquoi ça marche",
+        "4": "Justification anticipatoire — prédit avant de calculer"
+      },
+      "last_observed": null,
+      "evidence": null
+    },
+
+    "uncertainty_vocabulary": {
+      "current_level": 1,
+      "scale": {
+        "1": "Silence ou abandon face à l'incertitude",
+        "2": "Cherche validation externe — 'j'ai bon ?'",
+        "3": "Exprime l'incertitude — 'je pense que...'",
+        "4": "Raisonne malgré l'incertitude — 'je suis pas sûre mais...'",
+        "5": "Méta-incertitude — 'ça marche ici mais pas toujours parce que...'"
+      },
+      "phrases_observed": [],
+      "last_updated": null
+    },
+
+    "logical_connectors": {
+      "causality": [],
+      "condition": [],
+      "contrast": [],
+      "generalization": [],
+      "last_session_count": 0
+    },
+
+    "frustration_profile": {
+      "threshold_minutes": 3,
+      "recovery_speed": "inconnu",
+      "primary_trigger": "inconnu",
+      "avoidance_behaviors": []
+    },
+
+    "identity_signals": {
+      "self_efficacy_phrases": [],
+      "avoidance_phrases": [],
+      "net_direction": "inconnu"
+    }
+  },
+
+  "learning_profile": {
+    "best_anchor": null,
+    "anchor_effectiveness": {
+      "cuisine": null,
+      "musique": null,
+      "sport": null,
+      "jeux": null
+    },
+    "preferred_representation": null,
+    "optimal_session_length": null,
+    "best_time_of_day": null
+  },
+
+  "knowledge_map": {
+    "arithmetic": {
+      "number_sense": null,
+      "fractions_intuition": null,
+      "fractions_operations": null,
+      "decimals": null,
+      "percentages": null,
+      "ratios_proportions": null
+    },
+    "algebra": {
+      "pattern_recognition": null,
+      "variable_concept": null,
+      "equations_simple": null
+    },
+    "logical_reasoning": {
+      "problem_decomposition": null,
+      "verbal_expression": null,
+      "estimation_verification": null
+    },
+    "note": "null = non évalué | 0.0-1.0 = niveau de maîtrise"
+  },
+
+  "spontaneous_connections": [],
+
+  "session_history": {
+    "total_sessions": 0,
+    "last_session": null,
+    "average_duration_minutes": null,
+    "completion_rate": null
+  },
+
+  "parent_observations": {
+    "notes": [],
+    "last_updated": null
+  }
+}

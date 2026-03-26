@@ -6,29 +6,49 @@
 
 ## 🔴 EN ATTENTE D'ACTION
 
-*(vide pour l'instant — projet en initialisation)*
+### [2026-03-26] — Olivier
+**Tâche** : Configurer Supabase + Railway + Vercel
+**Type** : infra
+**Priorité** : Haute — bloque les tests en production
+**Instructions** :
+1. Créer le projet Supabase → exécuter `supabase/migrations/001_initial_schema.sql`
+2. Créer le service Railway pour le backend (voir `docs/RAILWAY-SETUP.md`)
+3. Déployer le frontend sur Vercel
+4. Configurer les variables d'environnement (voir `.env.example` dans backend + frontend)
+5. Tester le flow : login ELEVE-001 → session → message → fin → login PARENT-001 → rapport
+**Référence** : docs/RAILWAY-SETUP.md, backend/.env.example, frontend/.env.local.example
+**Statut** : ⏳ En attente
 
 ---
 
 ## 🟡 EN COURS
 
-### [2026-03-26] — Cowork
-**Tâche** : Setup initial — structure projet + Railway + Supabase
-**Priorité** : Haute — Sprint 1
-**Instructions** :
-1. Créer le projet Next.js 14 avec App Router dans /frontend
-2. Créer le backend Express.js dans /backend
-3. Initialiser Supabase avec le schéma défini dans CONTEXT.md
-4. Configurer Railway pour le backend + n8n
-5. Auth JWT avec deux rôles : student / parent
-6. Interface session basique : zone de chat + envoi message
-7. Rapport parent minimal généré en fin de session
-**Référence** : CONTEXT.md — sections "Stack technique", "Schéma Supabase", "Sprint 1"
-**Statut** : 🟡 À démarrer
+*(rien en cours — en attente du déploiement par Olivier)*
 
 ---
 
 ## ✅ COMPLÉTÉ
+
+### [2026-03-26] — Cowork
+**Tâche** : Sprint 1 MVP — Build complet frontend + backend
+**Type** : infra + feature
+**Fichiers créés** :
+- /frontend/ — Next.js 14 App Router + TypeScript + Tailwind CSS
+  - Login page (code d'accès, rôle élève/parent)
+  - Interface de session (chat bubbles, timer, envoi message)
+  - Dashboard parent (vue générale, rapports, alertes)
+  - Composants UI (ChatBubble, SessionTimer)
+  - Auth context + API client
+- /backend/ — Express.js
+  - Auth JWT (student/parent roles, code-based login)
+  - Routes : /api/auth, /api/session, /api/analysis, /api/reports
+  - Services : claude.js (stubbed), memory.js, alerts.js
+  - Système d'alertes niveau 0-3 (triggers hardcodés)
+  - Messages en mémoire (pas de transcriptions en DB)
+- /supabase/migrations/001_initial_schema.sql — schéma complet + seed data
+- /docs/RAILWAY-SETUP.md — instructions de déploiement
+**Validation** : Backend syntax OK (10/10 fichiers), Frontend TypeScript OK (0 erreurs)
+**Statut** : ✅ Build terminé — en attente déploiement
 
 ### [2026-03-26] — Claude.ai + Olivier
 **Tâche** : Initialisation du repo — fichiers fondateurs
@@ -100,4 +120,4 @@
 
 ---
 
-*Dernière mise à jour : 2026-03-26 — Initialisation*
+*Dernière mise à jour : 2026-03-26 — Sprint 1 MVP build terminé par Cowork*

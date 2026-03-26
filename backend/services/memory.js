@@ -3,10 +3,11 @@ const { v4: uuidv4 } = require('uuid');
 
 /**
  * Get student profile from database
+ * Updated schema: students table has id, internal_code, profile (JSONB)
  */
 async function getStudentProfile(studentId) {
   const { data, error } = await supabase
-    .from('student_profiles')
+    .from('students')
     .select('*')
     .eq('id', studentId)
     .single();
@@ -16,7 +17,12 @@ async function getStudentProfile(studentId) {
     throw { status: 404, message: 'Student not found' };
   }
 
-  return data || {};
+  if (!data) {
+    throw { status: 404, message: 'Student not found' };
+  }
+
+  // Return the profile JSONB field, or entire data object if no profile field
+  return data.profile || data;
 }
 
 /**
@@ -25,7 +31,7 @@ async function getStudentProfile(studentId) {
 async function getLastSessions(studentId, limit = 5) {
   const { data, error } = await supabase
     .from('sessions')
-    .select('id, started_at, duration_minutes, summary, cognitive_observations, parent_report')
+    .select('*')
     .eq('student_id', studentId)
     .order('started_at', { ascending: false })
     .limit(limit);
@@ -40,32 +46,37 @@ async function getLastSessions(studentId, limit = 5) {
 
 /**
  * Get knowledge map (nodes and connections)
+ * Uses knowledge_map table
  */
 async function getKnowledgeMap(studentId) {
   try {
     // Fetch knowledge nodes
     const { data: nodes, error: nodesError } = await supabase
-      .from('knowledge_nodes')
+      .from('knowledge_map')
       .select('*')
       .eq('student_id', studentId);
 
     if (nodesError) {
       console.error('Error fetching knowledge nodes:', nodesError);
+      return { nodes: [], connections: [] };
     }
 
-    // Fetch knowledge connections
-    const { data: connections, error: connectionsError } = await supabase
-      .from('knowledge_connections')
-      .select('*')
-      .eq('student_id', studentId);
-
-    if (connectionsError) {
-      console.error('Error fetching knowledge connections:', connectionsError);
+    // For now, connections are derived from nodes
+    // In a full implementation, there would be a separate connections table
+    const connections = [];
+    if (nodes && nodes.length > 1) {
+      for (let i = 0; i < nodes.length - 1; i++) {
+        connections.push({
+          from_concept_id: nodes[i].concept_id,
+          to_concept_id: nodes[i + 1].concept_id,
+          relationship_type: 'prerequisite'
+        });
+      }
     }
 
     return {
       nodes: nodes || [],
-      connections: connections || []
+      connections: connections
     };
   } catch (error) {
     console.error('Error getting knowledge map:', error);
@@ -85,8 +96,8 @@ async function createSession(sessionData) {
       id,
       student_id: sessionData.student_id,
       started_at: new Date().toISOString(),
-      mode: sessionData.mode || 'programme',
-      alert_level: 0
+      mode: sessionData.mode || 'PROGRAMME',
+      max_alert_level: 0
     })
     .select()
     .single();
@@ -161,7 +172,7 @@ async function addCognitiveMarker(markerData) {
  */
 async function getStudentByCode(internalCode) {
   const { data, error } = await supabase
-    .from('student_profiles')
+    .from('students')
     .select('*')
     .eq('internal_code', internalCode)
     .single();
@@ -172,6 +183,47 @@ async function getStudentByCode(internalCode) {
   }
 
   return data;
+}
+
+/**
+ * Get parent by internal code (for login)
+ */
+async function getParentByCode(internalCode) {
+  const { data, error } = await supabase
+    .from('parents')
+    .select('*')
+    .eq('internal_code', internalCode)
+    .single();
+
+  if (error) {
+    console.error('Error fetching parent by code:', error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * Resolve student from parent
+ * Get the student associated with a parent
+ */
+async function getStudentFromParent(parentId) {
+  const { data, error } = await supabase
+    .from('parents')
+    .select('student_id')
+    .eq('id', parentId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching parent:', error);
+    return null;
+  }
+
+  if (!data || !data.student_id) {
+    return null;
+  }
+
+  return getStudentProfile(data.student_id);
 }
 
 /**
@@ -200,5 +252,7 @@ module.exports = {
   updateSession,
   addCognitiveMarker,
   getStudentByCode,
+  getParentByCode,
+  getStudentFromParent,
   getSessionById
 };

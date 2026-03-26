@@ -11,12 +11,20 @@
 **Type** : infra
 **Priorité** : Haute — bloque les tests en production
 **Instructions** :
-1. Créer le projet Supabase → exécuter `supabase/migrations/001_initial_schema.sql`
+1. Créer le projet Supabase → exécuter `supabase/migrations/001_initial_schema.sql` (schéma simplifié : students, parents, sessions, knowledge_map, parent_alerts)
 2. Créer le service Railway pour le backend (voir `docs/RAILWAY-SETUP.md`)
 3. Déployer le frontend sur Vercel
 4. Configurer les variables d'environnement (voir `.env.example` dans backend + frontend)
-5. Tester le flow : login ELEVE-001 → session → message → fin → login PARENT-001 → rapport
+5. Optionnel : ajouter ANTHROPIC_API_KEY pour activer le vrai Claude (sinon le stub intelligent fonctionne)
+6. Tester le flow complet (voir checklist validation ci-dessous)
 **Référence** : docs/RAILWAY-SETUP.md, backend/.env.example, frontend/.env.local.example
+**Statut** : ⏳ En attente
+
+### [2026-03-26] — Olivier
+**Tâche** : Commit + push du code Sprint 1 sur GitHub
+**Type** : infra
+**Priorité** : Haute
+**Instructions** : Le code a été généré localement. Il doit être commité et poussé sur le repo GitHub.
 **Statut** : ⏳ En attente
 
 ---
@@ -30,25 +38,32 @@
 ## ✅ COMPLÉTÉ
 
 ### [2026-03-26] — Cowork
-**Tâche** : Sprint 1 MVP — Build complet frontend + backend
+**Tâche** : Sprint 1 MVP v2 — Rebuild complet selon spec Claude.ai
 **Type** : infra + feature
-**Fichiers créés** :
-- /frontend/ — Next.js 14 App Router + TypeScript + Tailwind CSS
-  - Login page (code d'accès, rôle élève/parent)
-  - Interface de session (chat bubbles, timer, envoi message)
-  - Dashboard parent (vue générale, rapports, alertes)
-  - Composants UI (ChatBubble, SessionTimer)
-  - Auth context + API client
-- /backend/ — Express.js
-  - Auth JWT (student/parent roles, code-based login)
-  - Routes : /api/auth, /api/session, /api/analysis, /api/reports
-  - Services : claude.js (stubbed), memory.js, alerts.js
-  - Système d'alertes niveau 0-3 (triggers hardcodés)
-  - Messages en mémoire (pas de transcriptions en DB)
-- /supabase/migrations/001_initial_schema.sql — schéma complet + seed data
-- /docs/RAILWAY-SETUP.md — instructions de déploiement
-**Validation** : Backend syntax OK (10/10 fichiers), Frontend TypeScript OK (0 erreurs)
-**Statut** : ✅ Build terminé — en attente déploiement
+**Source** : Design spec Claude.ai 2026-03-26 — "Sprint 1 Design Review & Spec"
+**Changements vs v1** :
+- Session split-panel : chat gauche (280px) + workspace droite (flex)
+- "Morphing session" : warm-up → mode selector → workspace → explanation → connection
+- Phase indicator : ● concret  ○ visuel  ○ symbolique
+- Claude service : vrai appel API (claude-sonnet-4-20250514) + fallback stub intelligent
+- Réponses structurées JSON : message + phase + alertLevel + cognitiveNotes
+- System prompt dynamique (services/systemPrompt.js)
+- Générateur de rapports parents (services/reportGenerator.js)
+- Auth simplifié : un seul code → rôle déduit (ELEVE-xxx = student, PARENT-xxx = parent)
+- Schéma DB simplifié : students, parents, sessions, knowledge_map, parent_alerts
+- Timer session : 40 min (au lieu de 35)
+**Fichiers** :
+- /frontend/ — 16 fichiers (pages + composants + lib)
+  - Session page split-panel avec ModeSelector, WorkspacePanel, PhaseIndicator
+  - ChatPanel réutilisable (mode large + narrow)
+  - Parent dashboard mis à jour pour nouveau format de rapport
+- /backend/ — 12 fichiers
+  - services/ : claude.js, systemPrompt.js, reportGenerator.js, memory.js, alerts.js, supabase.js
+  - routes/ : auth.js, session.js, reports.js, analysis.js
+  - middleware/ : auth.js
+- /supabase/migrations/001_initial_schema.sql — schéma simplifié + seed data
+**Validation** : Backend syntax OK (12/12 fichiers), Frontend TypeScript OK (0 erreurs)
+**Statut** : ✅ Build terminé — en attente commit + déploiement
 
 ### [2026-03-26] — Claude.ai + Olivier
 **Tâche** : Initialisation du repo — fichiers fondateurs
@@ -120,4 +135,25 @@
 
 ---
 
-*Dernière mise à jour : 2026-03-26 — Sprint 1 MVP build terminé par Cowork*
+## ✅ CHECKLIST DE VALIDATION — Sprint 1
+
+```
+1. [ ] Élève se connecte avec "ELEVE-001"
+2. [ ] Voit l'interface session — chat plein écran (warm-up)
+3. [ ] Claude la salue chaleureusement
+4. [ ] Elle choisit un mode : "Session du jour"
+5. [ ] Le workspace s'ouvre à droite, le chat passe à gauche
+6. [ ] Phase indicator : ● concret  ○ visuel  ○ symbolique
+7. [ ] Elle échange avec Claude, réponses structurées JSON
+8. [ ] Les transitions de phase arrivent via Claude
+9. [ ] Timer compte jusqu'à 40 min, warning à 35
+10. [ ] Session se termine → rapport parent généré
+11. [ ] Parent se connecte avec "PARENT-001"
+12. [ ] Voit le dashboard avec le rapport de session
+13. [ ] Rapport montre : engagement, moment notable, forces/blocages, signaux cognitifs
+14. [ ] Rapport montre : session suggérée + action parent
+```
+
+---
+
+*Dernière mise à jour : 2026-03-26 — Sprint 1 v2 rebuild par Cowork (spec Claude.ai)*

@@ -5,21 +5,35 @@ import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 
 interface Session {
-  sessionId: string;
-  startedAt: string;
-  endedAt: string;
+  session_id: string;
+  started_at: string;
+  ended_at: string;
   duration: number;
-  summary?: string;
+  engagement: number;
+  notable_moment: string;
+  observations: {
+    strengths: string[];
+    blockers: string[];
+    cognitive_signals: string[];
+  };
+  next_session: string;
+  parent_action: string;
 }
 
 interface Report {
-  sessionId: string;
-  summary: string;
-  observations: string[];
-  recommendations: string[];
+  session_id: string;
+  engagement: number;
+  notable_moment: string;
+  observations: {
+    strengths: string[];
+    blockers: string[];
+    cognitive_signals: string[];
+  };
+  next_session: string;
+  parent_action: string;
   duration: number;
-  startedAt: string;
-  endedAt: string;
+  started_at: string;
+  ended_at: string;
 }
 
 export default function ReportsPage() {
@@ -60,9 +74,11 @@ export default function ReportsPage() {
 
     setLoadingReport(sessionId);
     try {
-      const report = await api.getSessionReport(sessionId);
-      setReports((prev) => ({ ...prev, [sessionId]: report }));
-      setExpandedSession(sessionId);
+      if (user?.userId) {
+        const report = await api.getSingleSessionReport(user.userId, sessionId);
+        setReports((prev) => ({ ...prev, [sessionId]: report }));
+        setExpandedSession(sessionId);
+      }
     } catch (error) {
       console.error('Failed to load report:', error);
     } finally {
@@ -99,29 +115,29 @@ export default function ReportsPage() {
         <div className="bg-white rounded-2xl p-12 text-center text-slate-600">
           <p className="mb-2 text-lg">Aucune session pour le moment</p>
           <p className="text-sm text-slate-500">
-            Les rapports s'afficheront ici une fois que votre enfant aura terminé une session
+            Les rapports s&apos;afficheront ici une fois que votre enfant aura terminé une session
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {sessions.map((session) => {
-            const isExpanded = expandedSession === session.sessionId;
-            const report = reports[session.sessionId];
-            const isLoading = loadingReport === session.sessionId;
+            const isExpanded = expandedSession === session.session_id;
+            const report = reports[session.session_id];
+            const isLoading = loadingReport === session.session_id;
 
             return (
               <div
-                key={session.sessionId}
+                key={session.session_id}
                 className="bg-white rounded-2xl border border-slate-200 overflow-hidden"
               >
                 {/* Session Header */}
                 <button
-                  onClick={() => handleExpandSession(session.sessionId)}
+                  onClick={() => handleExpandSession(session.session_id)}
                   className="w-full p-4 hover:bg-slate-50 transition flex items-start justify-between"
                 >
                   <div className="flex-1 text-left">
                     <p className="font-semibold text-slate-900">
-                      {new Date(session.startedAt).toLocaleDateString('fr-FR', {
+                      {new Date(session.started_at).toLocaleDateString('fr-FR', {
                         weekday: 'long',
                         year: 'numeric',
                         month: 'long',
@@ -129,15 +145,15 @@ export default function ReportsPage() {
                       })}
                     </p>
                     <p className="text-sm text-slate-600 mt-1">
-                      {new Date(session.startedAt).toLocaleTimeString('fr-FR', {
+                      {new Date(session.started_at).toLocaleTimeString('fr-FR', {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}{' '}
                       - Durée: {session.duration} minutes
                     </p>
-                    {session.summary && (
+                    {session.notable_moment && (
                       <p className="text-sm text-slate-700 mt-2 line-clamp-2">
-                        {session.summary}
+                        {session.notable_moment}
                       </p>
                     )}
                   </div>
@@ -161,57 +177,119 @@ export default function ReportsPage() {
                       </p>
                     ) : report ? (
                       <div className="space-y-6">
-                        {/* Summary */}
+                        {/* Notable Moment */}
                         <div>
-                          <h3 className="font-semibold text-slate-900 mb-2">Résumé</h3>
+                          <h3 className="font-semibold text-slate-900 mb-2">Moment notable</h3>
                           <p className="text-slate-700 text-sm leading-relaxed">
-                            {report.summary}
+                            {report.notable_moment}
                           </p>
                         </div>
 
-                        {/* Observations */}
+                        {/* Engagement */}
                         <div>
-                          <h3 className="font-semibold text-slate-900 mb-3">Observations</h3>
-                          <ul className="space-y-2">
-                            {report.observations.map((obs, idx) => (
-                              <li
-                                key={idx}
-                                className="flex gap-3 text-sm text-slate-700"
-                              >
-                                <span className="text-indigo-600 font-bold flex-shrink-0">
-                                  •
-                                </span>
-                                <span>{obs}</span>
-                              </li>
-                            ))}
-                          </ul>
+                          <h3 className="font-semibold text-slate-900 mb-2">Engagement</h3>
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 h-2 bg-slate-300 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-indigo-600 transition-all"
+                                style={{ width: `${report.engagement}%` }}
+                              />
+                            </div>
+                            <span className="text-sm font-semibold text-slate-900">
+                              {report.engagement}%
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Recommendations */}
+                        {/* Observations - Strengths */}
+                        {report.observations.strengths.length > 0 && (
+                          <div>
+                            <h3 className="font-semibold text-slate-900 mb-3">Forces</h3>
+                            <ul className="space-y-2">
+                              {report.observations.strengths.map((strength, idx) => (
+                                <li
+                                  key={idx}
+                                  className="flex gap-3 text-sm text-slate-700"
+                                >
+                                  <span className="text-green-600 font-bold flex-shrink-0">
+                                    ✓
+                                  </span>
+                                  <span>{strength}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Observations - Blockers */}
+                        {report.observations.blockers.length > 0 && (
+                          <div>
+                            <h3 className="font-semibold text-slate-900 mb-3">
+                              Défis identifiés
+                            </h3>
+                            <ul className="space-y-2">
+                              {report.observations.blockers.map((blocker, idx) => (
+                                <li
+                                  key={idx}
+                                  className="flex gap-3 text-sm text-slate-700"
+                                >
+                                  <span className="text-orange-600 font-bold flex-shrink-0">
+                                    ⚡
+                                  </span>
+                                  <span>{blocker}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Observations - Cognitive Signals */}
+                        {report.observations.cognitive_signals.length > 0 && (
+                          <div>
+                            <h3 className="font-semibold text-slate-900 mb-3">
+                              Signaux cognitifs
+                            </h3>
+                            <ul className="space-y-2">
+                              {report.observations.cognitive_signals.map((signal, idx) => (
+                                <li
+                                  key={idx}
+                                  className="flex gap-3 text-sm text-slate-700"
+                                >
+                                  <span className="text-blue-600 font-bold flex-shrink-0">
+                                    🧠
+                                  </span>
+                                  <span>{signal}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Next Session */}
                         <div>
-                          <h3 className="font-semibold text-slate-900 mb-3">
-                            Recommandations
+                          <h3 className="font-semibold text-slate-900 mb-2">
+                            Prochaine session
                           </h3>
-                          <ul className="space-y-2">
-                            {report.recommendations.map((rec, idx) => (
-                              <li
-                                key={idx}
-                                className="flex gap-3 text-sm text-slate-700"
-                              >
-                                <span className="text-amber-600 font-bold flex-shrink-0">
-                                  💡
-                                </span>
-                                <span>{rec}</span>
-                              </li>
-                            ))}
-                          </ul>
+                          <p className="text-slate-700 text-sm leading-relaxed">
+                            {report.next_session}
+                          </p>
+                        </div>
+
+                        {/* Parent Action */}
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                          <h3 className="font-semibold text-amber-900 mb-2">
+                            Action suggérée pour vous
+                          </h3>
+                          <p className="text-amber-900 text-sm leading-relaxed">
+                            {report.parent_action}
+                          </p>
                         </div>
 
                         {/* Session Duration */}
                         <div className="pt-4 border-t border-slate-300">
                           <p className="text-xs text-slate-600">
-                            <strong>Session:</strong> {formatDateTime(report.startedAt)} à{' '}
-                            {formatDateTime(report.endedAt)} ({report.duration} minutes)
+                            <strong>Session:</strong> {formatDateTime(report.started_at)} à{' '}
+                            {formatDateTime(report.ended_at)} ({report.duration} minutes)
                           </p>
                         </div>
                       </div>

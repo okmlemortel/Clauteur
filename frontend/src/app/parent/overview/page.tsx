@@ -6,11 +6,19 @@ import { api } from '@/lib/api';
 import Link from 'next/link';
 
 interface Session {
-  sessionId: string;
-  startedAt: string;
-  endedAt: string;
+  session_id: string;
+  started_at: string;
+  ended_at: string;
   duration: number;
-  summary?: string;
+  engagement: number;
+  notable_moment: string;
+  observations: {
+    strengths: string[];
+    blockers: string[];
+    cognitive_signals: string[];
+  };
+  next_session: string;
+  parent_action: string;
 }
 
 interface Alert {
@@ -52,8 +60,8 @@ export default function OverviewPage() {
 
   const totalSessions = sessions.length;
   const totalMinutes = sessions.reduce((sum, s) => sum + s.duration, 0);
-  const lastSessionDate = sessions[0]?.startedAt
-    ? new Date(sessions[0].startedAt).toLocaleDateString('fr-FR', {
+  const lastSessionDate = sessions[0]?.started_at
+    ? new Date(sessions[0].started_at).toLocaleDateString('fr-FR', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
@@ -115,11 +123,11 @@ export default function OverviewPage() {
         {/* Total Minutes Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-slate-600">Temps d'apprentissage</h3>
+            <h3 className="text-sm font-medium text-slate-600">Temps d&apos;apprentissage</h3>
             <div className="text-2xl">⏱️</div>
           </div>
           <p className="text-3xl font-bold text-slate-900">{formatTime(totalMinutes)}</p>
-          <p className="text-xs text-slate-500 mt-2">total d'étude</p>
+          <p className="text-xs text-slate-500 mt-2">total d&apos;étude</p>
         </div>
 
         {/* Last Session Card */}
@@ -186,25 +194,25 @@ export default function OverviewPage() {
           <div className="space-y-3">
             {sessions.map((session) => (
               <div
-                key={session.sessionId}
+                key={session.session_id}
                 className="bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-md transition"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <p className="font-medium text-slate-900">
-                      {new Date(session.startedAt).toLocaleDateString('fr-FR', {
+                      {new Date(session.started_at).toLocaleDateString('fr-FR', {
                         weekday: 'short',
                         month: 'short',
                         day: 'numeric',
                       })}{' '}
                       à{' '}
-                      {new Date(session.startedAt).toLocaleTimeString('fr-FR', {
+                      {new Date(session.started_at).toLocaleTimeString('fr-FR', {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}
                     </p>
-                    {session.summary && (
-                      <p className="text-sm text-slate-600 mt-2">{session.summary}</p>
+                    {session.notable_moment && (
+                      <p className="text-sm text-slate-600 mt-2">{session.notable_moment}</p>
                     )}
                   </div>
                   <div className="text-right">

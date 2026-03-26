@@ -38,50 +38,82 @@ const makeRequest = async <T>(
   return response.json();
 };
 
+export interface SessionMessage {
+  id: string;
+  content: string;
+  sender: 'student' | 'tutor';
+  timestamp: string;
+}
+
+export interface SessionResponse {
+  message: string;
+  phase: 'concret' | 'visuel' | 'symbolique' | null;
+  alertLevel?: number;
+}
+
+export interface SessionStartResponse {
+  session_id: string;
+  started_at: string;
+  mode?: string;
+  greeting: string;
+}
+
+export interface SessionReport {
+  session_id: string;
+  engagement: number;
+  notable_moment: string;
+  observations: {
+    strengths: string[];
+    blockers: string[];
+    cognitive_signals: string[];
+  };
+  next_session: string;
+  parent_action: string;
+  duration: number;
+  started_at: string;
+  ended_at: string;
+}
+
 export const api = {
   // Auth
-  login: async (code: string, role: 'student' | 'parent') => {
+  login: async (code: string) => {
     const data = await makeRequest<{
-      userId: string;
+      user_id: string;
       token: string;
-      role: string;
+      role: 'student' | 'parent';
+      profile?: Record<string, unknown>;
     }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ code, role }),
+      body: JSON.stringify({ code }),
     });
     return data;
   },
 
   // Sessions
-  startSession: async () => {
-    const data = await makeRequest<{
-      sessionId: string;
-      startedAt: string;
-    }>('/sessions/start', {
+  startSession: async (mode: 'devoir' | 'session' | 'explorer') => {
+    const data = await makeRequest<SessionStartResponse>('/session/start', {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify({ mode }),
     });
     return data;
   },
 
-  sendMessage: async (sessionId: string, message: string) => {
-    const data = await makeRequest<{
-      messageId: string;
-      tutorResponse: string;
-      timestamp: string;
-    }>(`/sessions/${sessionId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ message }),
-    });
+  sendMessage: async (sessionId: string, message: string): Promise<SessionResponse> => {
+    const data = await makeRequest<SessionResponse>(
+      `/session/${sessionId}/message`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ message }),
+      }
+    );
     return data;
   },
 
   endSession: async (sessionId: string) => {
     const data = await makeRequest<{
-      sessionId: string;
-      endedAt: string;
-      duration: number;
-    }>(`/sessions/${sessionId}/end`, {
+      session_id: string;
+      report: SessionReport;
+    }>(`/session/${sessionId}/end`, {
       method: 'POST',
       body: JSON.stringify({}),
     });
@@ -89,32 +121,26 @@ export const api = {
   },
 
   getSessionReport: async (sessionId: string) => {
-    const data = await makeRequest<{
-      sessionId: string;
-      summary: string;
-      observations: string[];
-      recommendations: string[];
-      duration: number;
-      startedAt: string;
-      endedAt: string;
-    }>(`/sessions/${sessionId}/report`);
+    const data = await makeRequest<SessionReport>(`/reports/${sessionId}`);
+    return data;
+  },
+
+  // Reports (parent)
+  getStudentSessions: async (studentId: string) => {
+    const data = await makeRequest<SessionReport[]>(
+      `/reports/${studentId}/sessions`
+    );
+    return data;
+  },
+
+  getSingleSessionReport: async (studentId: string, sessionId: string) => {
+    const data = await makeRequest<SessionReport>(
+      `/reports/${studentId}/sessions/${sessionId}`
+    );
     return data;
   },
 
   // Student
-  getStudentSessions: async (studentId: string) => {
-    const data = await makeRequest<
-      Array<{
-        sessionId: string;
-        startedAt: string;
-        endedAt: string;
-        duration: number;
-        summary?: string;
-      }>
-    >(`/students/${studentId}/sessions`);
-    return data;
-  },
-
   getKnowledgeMap: async (studentId: string) => {
     const data = await makeRequest<{
       studentId: string;

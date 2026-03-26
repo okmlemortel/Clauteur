@@ -11,9 +11,9 @@ export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
 
-  const handleLogin = async (role: 'student' | 'parent') => {
+  const handleLogin = async () => {
     if (!code.trim()) {
-      setError('Veuillez entrer un code d\'accès');
+      setError('Veuillez entrer un code d&apos;accès');
       return;
     }
 
@@ -21,10 +21,13 @@ export default function LoginPage() {
     setError('');
 
     try {
-      await login(code, role);
-      router.push(role === 'student' ? '/student/session' : '/parent/overview');
+      await login(code);
+      // The role is determined by the backend based on the code
+      // Redirect based on user's role stored in localStorage after login
+      const role = localStorage.getItem('user_role');
+      router.push(role === 'student' ? '/session' : '/parent');
     } catch (err) {
-      setError('Code d\'accès invalide. Veuillez réessayer.');
+      setError('Code d&apos;accès invalide. Veuillez réessayer.');
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -40,7 +43,7 @@ export default function LoginPage() {
             <span className="text-2xl font-bold text-white">C</span>
           </div>
           <h1 className="text-3xl font-bold text-slate-900 mb-2">Clauteur</h1>
-          <p className="text-base text-slate-600">Ton espace d'apprentissage</p>
+          <p className="text-base text-slate-600">Ton espace d&apos;apprentissage</p>
         </div>
 
         {/* Card */}
@@ -48,7 +51,7 @@ export default function LoginPage() {
           {/* Code Input */}
           <div>
             <label htmlFor="code" className="block text-sm font-medium text-slate-700 mb-2">
-              Code d'accès
+              Code d&apos;accès
             </label>
             <input
               id="code"
@@ -60,7 +63,7 @@ export default function LoginPage() {
               }}
               onKeyPress={(e) => {
                 if (e.key === 'Enter' && !isLoading) {
-                  handleLogin('student');
+                  handleLogin();
                 }
               }}
               placeholder="Entre ton code..."
@@ -76,27 +79,18 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Buttons */}
-          <div className="space-y-3">
-            <button
-              onClick={() => handleLogin('student')}
-              disabled={isLoading}
-              className="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all hover:from-indigo-700 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? 'Connexion...' : 'Entrer comme élève'}
-            </button>
-            <button
-              onClick={() => handleLogin('parent')}
-              disabled={isLoading}
-              className="w-full bg-white border-2 border-indigo-200 text-indigo-600 font-semibold py-3 rounded-xl hover:bg-indigo-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Entrer comme parent
-            </button>
-          </div>
+          {/* Button */}
+          <button
+            onClick={handleLogin}
+            disabled={isLoading}
+            className="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-semibold py-3 rounded-xl hover:shadow-lg transition-all hover:from-indigo-700 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Connexion...' : 'Entrer'}
+          </button>
 
           {/* Footer Text */}
           <p className="text-center text-xs text-slate-500 pt-4 border-t border-slate-100">
-            Besoin d'aide ? Contacte ton parent ou ton tuteur pour obtenir un code.
+            Besoin d&apos;aide ? Contacte ton parent ou ton tuteur pour obtenir un code.
           </p>
         </div>
       </div>

@@ -15,7 +15,9 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body className="antialiased bg-slate-50 text-slate-900" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

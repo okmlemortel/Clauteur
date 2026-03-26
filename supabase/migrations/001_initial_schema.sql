@@ -1,136 +1,93 @@
--- Clauteur — Initial Schema
--- Sprint 1 MVP
+-- Clauteur — Initial Schema (Sprint 1 MVP)
+-- Source of truth: Claude.ai design spec, 2026-03-26
 -- Run this in Supabase SQL Editor or via CLI migration
 
--- Enable UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 -- ============================================
--- Profil élève
+-- Students (no real names in DB — internal_code only)
 -- ============================================
-CREATE TABLE student_profiles (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  internal_code TEXT UNIQUE NOT NULL,
-  age INT,
-  grade TEXT,
-  languages TEXT[],
-  interests TEXT[],
-  cognitive_stage INT DEFAULT 1,        -- 1 à 4
-  best_anchor TEXT,                     -- 'cuisine', 'musique', etc.
-  frustration_threshold INT DEFAULT 3,  -- minutes avant abandon
-  uncertainty_vocab_level INT DEFAULT 1,
-  created_at TIMESTAMP DEFAULT NOW()
+CREATE TABLE students (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  internal_code TEXT UNIQUE NOT NULL,  -- "ELEVE-001"
+  profile JSONB DEFAULT '{}',          -- cognitive profile (mirrors student-profile.json)
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ============================================
--- Sessions (synthèses, jamais transcriptions brutes)
+-- Parents
+-- ============================================
+CREATE TABLE parents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  internal_code TEXT UNIQUE NOT NULL,  -- "PARENT-001"
+  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ============================================
+-- Sessions (summaries only, no raw transcripts)
 -- ============================================
 CREATE TABLE sessions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  student_id UUID REFERENCES student_profiles(id) ON DELETE CASCADE,
-  started_at TIMESTAMP DEFAULT NOW(),
-  ended_at TIMESTAMP,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
+  mode TEXT NOT NULL,                   -- "diagnostic", "fondations", "programme", "exploration"
+  started_at TIMESTAMPTZ DEFAULT now(),
+  ended_at TIMESTAMPTZ,
   duration_minutes INT,
-  mode TEXT DEFAULT 'fondations',       -- 'fondations' | 'programme' | 'exploration'
-  summary TEXT,
-  cognitive_observations JSONB,
-  spontaneous_connections TEXT[],
-  frustration_events INT DEFAULT 0,
-  recovery_speed TEXT,                  -- 'rapide' | 'moyen' | 'lent'
-  parent_report JSONB,
-  alert_level INT DEFAULT 0            -- 0: rien | 1: noter | 2: alerter | 3: urgent
+  summary JSONB,                        -- cognitive notes aggregate
+  report JSONB,                         -- parent report
+  max_alert_level INT DEFAULT 0
 );
 
 -- ============================================
--- Knowledge map — nœuds
+-- Knowledge map entries
 -- ============================================
-CREATE TABLE knowledge_nodes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  student_id UUID REFERENCES student_profiles(id) ON DELETE CASCADE,
-  domain TEXT NOT NULL,
-  concept TEXT NOT NULL,
-  mastery_level FLOAT DEFAULT 0,        -- 0 à 1
-  last_visited TIMESTAMP,
-  anchor_used TEXT
+CREATE TABLE knowledge_map (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
+  concept_id TEXT NOT NULL,
+  status TEXT DEFAULT 'not_started',     -- not_started, in_progress, mastered
+  last_session_id UUID REFERENCES sessions(id) ON DELETE SET NULL,
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(student_id, concept_id)
 );
 
 -- ============================================
--- Knowledge map — connexions inter-concepts
--- ============================================
-CREATE TABLE knowledge_connections (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  student_id UUID REFERENCES student_profiles(id) ON DELETE CASCADE,
-  concept_a TEXT NOT NULL,
-  concept_b TEXT NOT NULL,
-  strength FLOAT DEFAULT 0.1,
-  first_observed TIMESTAMP DEFAULT NOW(),
-  last_reinforced TIMESTAMP DEFAULT NOW()
-);
-
--- ============================================
--- Marqueurs cognitifs longitudinaux
--- ============================================
-CREATE TABLE cognitive_markers (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  student_id UUID REFERENCES student_profiles(id) ON DELETE CASCADE,
-  session_id UUID REFERENCES sessions(id) ON DELETE CASCADE,
-  marker_type TEXT NOT NULL,   -- 'justification' | 'incertitude' | 'connexion' | 'identite'
-  value TEXT,
-  stage_at_time INT,
-  noted_at TIMESTAMP DEFAULT NOW()
-);
-
--- ============================================
--- Alertes parents
+-- Parent alerts
 -- ============================================
 CREATE TABLE parent_alerts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  student_id UUID REFERENCES student_profiles(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID REFERENCES students(id) ON DELETE CASCADE,
   session_id UUID REFERENCES sessions(id) ON DELETE SET NULL,
   level INT NOT NULL,           -- 1 | 2 | 3
   type TEXT,
   message TEXT,
-  read_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW()
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- ============================================
--- Index pour performance
+-- Indexes
 -- ============================================
 CREATE INDEX idx_sessions_student ON sessions(student_id);
 CREATE INDEX idx_sessions_started ON sessions(started_at DESC);
-CREATE INDEX idx_knowledge_nodes_student ON knowledge_nodes(student_id);
-CREATE INDEX idx_knowledge_connections_student ON knowledge_connections(student_id);
-CREATE INDEX idx_cognitive_markers_student ON cognitive_markers(student_id);
-CREATE INDEX idx_cognitive_markers_session ON cognitive_markers(session_id);
+CREATE INDEX idx_knowledge_map_student ON knowledge_map(student_id);
 CREATE INDEX idx_parent_alerts_student ON parent_alerts(student_id);
 CREATE INDEX idx_parent_alerts_unread ON parent_alerts(student_id) WHERE read_at IS NULL;
 
 -- ============================================
--- Seed data — profil élève initial pour MVP
+-- Seed data
 -- ============================================
-INSERT INTO student_profiles (
-  internal_code,
-  age,
-  grade,
-  languages,
-  interests,
-  cognitive_stage,
-  best_anchor,
-  frustration_threshold,
-  uncertainty_vocab_level
-) VALUES (
-  'ELEVE-001',
-  13,
-  '8th grade',
-  ARRAY['français', 'anglais'],
-  ARRAY['jeux', 'sport', 'musique', 'cuisine'],
-  1,
-  'cuisine',
-  3,
-  1
-);
+INSERT INTO students (internal_code, profile) VALUES
+  ('ELEVE-001', '{
+    "name": "à confirmer",
+    "age": 13,
+    "grade": "8th",
+    "languages": ["fr", "en"],
+    "interests": ["jeux", "sport", "musique", "cuisine"],
+    "cognitive_stage": 1,
+    "best_anchor": "cuisine",
+    "frustration_threshold": 3,
+    "uncertainty_vocab_level": 1
+  }');
 
--- Parent access code (same student, parent role)
--- In MVP, parents use 'PARENT-001' as their access code
--- We store this as a simple lookup — same student_id
+INSERT INTO parents (internal_code, student_id) VALUES
+  ('PARENT-001', (SELECT id FROM students WHERE internal_code = 'ELEVE-001'));

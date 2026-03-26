@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(gh repo:*)",
+      "Bash(mkdir -p .claude .github/workflows scripts pending/lessons docs/sessions)",
+      "Bash(mv CONTEXT.md .claude/)",
+      "Bash(mv COMMUNICATION.md .claude/)",
+      "Bash(mv student-profile.json .claude/)",
+      "Bash(mv figma-links.md .claude/)",
+      "Bash(git push:*)"
+    ]
+  }
+}

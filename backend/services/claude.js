@@ -1,138 +1,189 @@
-const memory = require('./memory');
+const Anthropic = require('@anthropic-ai/sdk');
+const { buildSystemPrompt } = require('./systemPrompt');
 
-// Stub responses for simulating Claude API
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const USE_REAL_API = !!ANTHROPIC_API_KEY;
+
+// Structured stub responses for fallback mode (when no API key)
 const STUB_RESPONSES = [
   {
-    en: "That's an interesting question! Let me break it down for you. Think about it this way: if you have 3/4 of a pizza and your friend has 1/4, how much pizza do you have together? Right! So when we add fractions, we need the same denominator. Do you want to try another example?",
-    fr: "C'est une bonne question! Je vois que tu as trouvé un pattern intéressant. Peux-tu me montrer comment tu as pensé ça? J'aime quand on raisonne ensemble plutôt que de juste donner la réponse. Qu'est-ce que tu penses du prochain problème?"
+    message: "That's an interesting question! Think about it this way: if you have 3/4 of a pizza and your friend has 1/4, how much pizza do you have together? Right! So when we add fractions, we need the same denominator. You want to try another example?",
+    phase: "concret",
+    alertLevel: 0,
+    cognitiveNotes: {
+      justificationLevel: 2,
+      connectorsUsed: ["analogy", "everyday_example"],
+      engagement: "high",
+      notableObservation: "Student is engaged with concrete examples"
+    }
   },
   {
-    en: "Great effort! I noticed you're working through this really carefully. Sometimes math is about trying different approaches. Let's think about what didn't work here and why. Can you see where the logic breaks down? Then we can build it back up together.",
-    fr: "Excellent! Tu es sur la bonne piste. Je vois que tu comprends le concept même si tu n'as pas mis tous les détails. Maintenant essayons de te montrer une autre façon de penser ce problème. Crois-tu que ça marchera mieux?"
+    message: "Great effort! I noticed you're working through this really carefully. Sometimes math is about trying different approaches. Let's think about what didn't work here and why. Can you see where the logic breaks down?",
+    phase: "visuel",
+    alertLevel: 0,
+    cognitiveNotes: {
+      justificationLevel: 2,
+      connectorsUsed: ["visual_breakdown", "reflection"],
+      engagement: "medium",
+      notableObservation: "Student shows self-correction ability"
+    }
   },
   {
-    en: "I love that you're thinking about the big picture! Before we jump to the answer, let's pause. What information do we already have? What are we trying to find? Sometimes organizing what we know helps us see the path forward. What do you think?",
-    fr: "Je remarque que tu as utilisé un exemple de la cuisine pour expliquer ça — c'est vraiment intelligent! Tes ancres personnelles sont tes meilleurs outils pour apprendre. Voyons si on peut continuer avec ce qu'on connaît."
+    message: "I love that you're thinking about the big picture! Before we jump to the answer, let's pause. What information do we already have? What are we trying to find? Sometimes organizing what we know helps us see the path forward. What do you think?",
+    phase: "symbolique",
+    alertLevel: 0,
+    cognitiveNotes: {
+      justificationLevel: 3,
+      connectorsUsed: ["logic", "structure"],
+      engagement: "high",
+      notableObservation: "Student demonstrates systems thinking"
+    }
   },
   {
-    en: "You're thinking like a mathematician now! You questioned the problem before jumping in. That's exactly what experts do. Let's keep that energy going — what would happen if we changed one thing in the problem?",
-    fr: "C'est intéressant qu'tu voies ça de cette façon. Les erreurs sont nos meilleures prof. Qu'est-ce que tu apprends de ce que tu viens de faire? Comment pourrais-tu l'appliquer ailleurs?"
+    message: "You're thinking like a mathematician now! You questioned the problem before jumping in. That's exactly what experts do. Let's keep that energy going — what would happen if we changed one thing in the problem?",
+    phase: null,
+    alertLevel: 0,
+    cognitiveNotes: {
+      justificationLevel: 3,
+      connectorsUsed: ["hypothesis", "variation"],
+      engagement: "high",
+      notableObservation: "Student shows metacognitive awareness"
+    }
   }
 ];
 
 /**
- * Build dynamic system prompt for a student
+ * Initialize Anthropic client (only if API key present)
  */
-async function buildSystemPrompt(studentId) {
+function getClient() {
+  if (!USE_REAL_API) {
+    return null;
+  }
+  return new Anthropic({
+    apiKey: ANTHROPIC_API_KEY
+  });
+}
+
+/**
+ * Call Claude API with structured JSON response requirement
+ */
+async function callClaudeAPI(client, systemPrompt, messages) {
   try {
-    const profile = await memory.getStudentProfile(studentId);
-    const sessions = await memory.getLastSessions(studentId, 3);
-    const knowledge = await memory.getKnowledgeMap(studentId);
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: messages.map(m => ({
+        role: m.role,
+        content: m.content
+      }))
+    });
 
-    const recentSummary = sessions.length > 0
-      ? sessions.map(s => s.summary || 'Session without summary').join('\n')
-      : 'No previous sessions yet.';
+    const content = response.content[0]?.text || '';
 
-    const activeZones = knowledge.nodes && knowledge.nodes.length > 0
-      ? knowledge.nodes.map(n => `${n.concept} (mastery: ${n.mastery_level})`).join(', ')
-      : 'No knowledge zones yet';
-
-    return `You are the AI tutor for a 13-year-old student.
-
-COGNITIVE PROFILE:
-- Age: ${profile.age || 13} years old
-- Languages: ${(profile.languages || ['english']).join(', ')}
-- Learning stage: ${profile.cognitive_stage || 1}/4
-- Best anchor for learning: ${profile.best_anchor || 'examples'}
-- Frustration threshold: ${profile.frustration_threshold || 3} minutes
-- Interests: ${(profile.interests || []).join(', ') || 'various topics'}
-
-ACTIVE KNOWLEDGE ZONES:
-${activeZones}
-
-RECENT SESSION CONTEXT:
-${recentSummary}
-
-YOUR ROLE:
-- Be warm, encouraging, and patient
-- Use the student's interests (${profile.best_anchor || 'personal anchors'}) to explain concepts
-- Ask questions to help them think through problems
-- Never point out delays or compare to grade level
-- Always identify yourself as an AI tutor
-- Keep explanations clear and age-appropriate
-- Celebrate effort and curiosity
-- Max session duration: 35 minutes
-
-SAFETY PROTOCOL:
-- If student expresses self-harm, immediately pause tutoring
-- Respond with support and escalate to parent
-- Do not continue normal tutoring after level 3 alert
-
-Remember: Your goal is not just to teach content, but to help this student develop confidence in their thinking.`;
-  } catch (error) {
-    console.error('Error building system prompt:', error);
-    // Return a basic fallback prompt
-    return `You are an AI tutor for a 13-year-old student. Be warm, encouraging, and patient. Use examples they relate to. Ask questions to help them think through problems. Never point out delays or compare to grade level.`;
-  }
-}
-
-/**
- * Simulate Claude API response for stubbed responses
- * In production, this would call the actual Anthropic API
- */
-function chat(systemPrompt, messages) {
-  // For now, return a random stub response from our collection
-  const randomIndex = Math.floor(Math.random() * STUB_RESPONSES.length);
-  const stub = STUB_RESPONSES[randomIndex];
-
-  // Simple language detection from messages
-  let response = stub.en;
-  if (messages && messages.length > 0) {
-    const lastMessage = messages[messages.length - 1].content || '';
-    const frenchPatterns = /\b(je|tu|il|elle|nous|vous|pour|avec|pourquoi|comment|comment|oui|non)\b/i;
-    if (frenchPatterns.test(lastMessage)) {
-      response = stub.fr;
+    // Parse the response as JSON
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (e) {
+      console.error('Failed to parse Claude response as JSON:', content);
+      throw new Error('Claude did not return valid JSON');
     }
-  }
 
-  return {
-    content: response,
-    role: 'assistant'
-  };
+    // Validate required fields
+    if (!parsed.message) {
+      throw new Error('Claude response missing "message" field');
+    }
+
+    // Ensure alertLevel is 0-3
+    if (parsed.alertLevel === undefined) {
+      parsed.alertLevel = 0;
+    } else if (typeof parsed.alertLevel !== 'number') {
+      parsed.alertLevel = parseInt(parsed.alertLevel, 10) || 0;
+    }
+    parsed.alertLevel = Math.max(0, Math.min(3, parsed.alertLevel));
+
+    // Ensure phase is valid
+    if (parsed.phase && !['concret', 'visuel', 'symbolique'].includes(parsed.phase)) {
+      parsed.phase = null;
+    }
+
+    // Ensure cognitiveNotes structure
+    if (!parsed.cognitiveNotes) {
+      parsed.cognitiveNotes = {
+        justificationLevel: 2,
+        connectorsUsed: [],
+        engagement: 'medium',
+        notableObservation: null
+      };
+    } else {
+      parsed.cognitiveNotes = {
+        justificationLevel: Math.max(1, Math.min(4, parsed.cognitiveNotes.justificationLevel || 2)),
+        connectorsUsed: Array.isArray(parsed.cognitiveNotes.connectorsUsed) ? parsed.cognitiveNotes.connectorsUsed : [],
+        engagement: ['high', 'medium', 'low'].includes(parsed.cognitiveNotes.engagement) ? parsed.cognitiveNotes.engagement : 'medium',
+        notableObservation: parsed.cognitiveNotes.notableObservation || null
+      };
+    }
+
+    return parsed;
+  } catch (error) {
+    console.error('Claude API error:', error);
+    throw error;
+  }
 }
 
 /**
- * Generate a parent report from session data
+ * Generate a stub response (for local development without API key)
  */
-function generateParentReport(sessionData) {
-  const cognitiveObservations = {
-    engagement_level: Math.random() > 0.5 ? 'high' : 'moderate',
-    frustration_events: Math.floor(Math.random() * 3),
-    self_correction: Math.random() > 0.4,
-    question_quality: ['surface', 'moderate', 'deep'][Math.floor(Math.random() * 3)],
-    connection_making: Math.random() > 0.5
-  };
+function generateStubResponse() {
+  const randomIndex = Math.floor(Math.random() * STUB_RESPONSES.length);
+  return { ...STUB_RESPONSES[randomIndex] };
+}
 
-  const recommendations = [
-    'Continue building on their strengths with practical examples',
-    'Encourage more self-questioning before jumping to answers',
-    'Use more visual/interactive explanations when they seem stuck',
-    'Celebrate small wins to build confidence'
+/**
+ * Chat with Claude (or fallback to stub)
+ * Returns structured response with message, phase, alertLevel, cognitiveNotes
+ */
+async function chat(systemPrompt, messages, studentProfile = null) {
+  try {
+    // If no API key, use stub mode
+    if (!USE_REAL_API) {
+      console.log('No ANTHROPIC_API_KEY detected. Using stub responses.');
+      return generateStubResponse();
+    }
+
+    // Use real Claude API
+    const client = getClient();
+    if (!client) {
+      return generateStubResponse();
+    }
+
+    const response = await callClaudeAPI(client, systemPrompt, messages);
+    return response;
+  } catch (error) {
+    console.error('Chat error, falling back to stub:', error.message);
+    return generateStubResponse();
+  }
+}
+
+/**
+ * Generate a warm-up greeting for session start
+ */
+async function generateGreeting(studentProfile) {
+  const systemPrompt = buildSystemPrompt(studentProfile, 'PROGRAMME', []);
+
+  const messages = [
+    {
+      role: 'user',
+      content: 'Say hello and ask what I would like to learn about today. Keep it brief and warm.'
+    }
   ];
 
-  return {
-    summary: `Session focused on ${sessionData.mode || 'learning new concepts'}. Student showed ${cognitiveObservations.engagement_level} engagement.`,
-    cognitive_observations: cognitiveObservations,
-    duration_minutes: sessionData.duration || 0,
-    concepts_touched: sessionData.concepts || [],
-    recommendations: recommendations,
-    next_focus: 'Continue reinforcing foundational concepts',
-    alert_level: 0
-  };
+  return chat(systemPrompt, messages, studentProfile);
 }
 
 module.exports = {
-  buildSystemPrompt,
   chat,
-  generateParentReport
+  generateGreeting,
+  buildSystemPrompt
 };

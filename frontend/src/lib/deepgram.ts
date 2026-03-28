@@ -10,43 +10,86 @@ export interface TranscriptEvent {
   }>;
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+
+/**
+ * Derive the WebSocket URL from the REST API URL
+ * e.g. https://clauteur-production.up.railway.app/api → wss://clauteur-production.up.railway.app
+ */
+function getWsBaseUrl(): string {
+  // Strip /api suffix and switch protocol
+  const base = API_BASE_URL.replace(/\/api\/?$/, '');
+  return base.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
+}
+
 class DeepgramClient {
   private ws: WebSocket | null = null;
   private mediaRecorder: MediaRecorder | null = null;
   private mediaStream: MediaStream | null = null;
   private isRecordingState: boolean = false;
+  private onTranscriptCallback: ((event: TranscriptEvent) => void) | null = null;
+  private onErrorCallback: ((err: Error) => void) | null = null;
 
   async connect(
     token: string,
     onTranscript: (event: TranscriptEvent) => void,
     onError: (err: Error) => void
   ): Promise<void> {
+    this.onTranscriptCallback = onTranscript;
+    this.onErrorCallback = onError;
+
     try {
-      // Connect to backend WebSocket proxy
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/api/deepgram/ws?token=${token}`;
+      // Connect to backend WebSocket proxy on Railway (not Vercel)
+      const wsBase = getWsBaseUrl();
+      const wsUrl = `${wsBase}/api/voice?token=${token}`;
+
+      console.log('[Deepgram] Connecting to:', wsUrl);
 
       this.ws = new WebSocket(wsUrl);
+
+      this.ws.onopen = () => {
+        console.log('[Deepgram] WebSocket connected');
+      };
 
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          onTranscript(data);
+          if (data.type === 'transcript' && data.data) {
+            onTranscript(data.data);
+          } else if (data.type === 'error') {
+            console.error('[Deepgram] Server error:', data.message);
+            onError(new Error(data.message));
+          } else if (data.type === 'connection') {
+            console.log('[Deepgram] Connection status:', data.status);
+          }
         } catch (err) {
-          console.error('Failed to parse transcript:', err);
+          console.error('[Deepgram] Failed to parse message:', err);
         }
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      this.ws.onerror = (event) => {
-        onError(new Error('WebSocket error'));
+      this.ws.onerror = () => {
+        console.error('[Deepgram] WebSocket error');
+        onError(new Error('Voice WebSocket connection error'));
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (event) => {
+        console.log('[Deepgram] WebSocket closed:', event.code, event.reason);
+        this.isRecordingState = false;
         this.mediaRecorder = null;
       };
+
+      // Wait for connection to open
+      await new Promise<void>((resolve, reject) => {
+        if (!this.ws) return reject(new Error('No WebSocket'));
+        const timeout = setTimeout(() => reject(new Error('Connection timeout')), 5000);
+        this.ws.addEventListener('open', () => { clearTimeout(timeout); resolve(); }, { once: true });
+        this.ws.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Connection failed')); }, { once: true });
+      });
     } catch (err) {
-      onError(err instanceof Error ? err : new Error(String(err)));
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error('[Deepgram] Connect error:', error.message);
+      onError(error);
+      throw error;
     }
   }
 
@@ -76,7 +119,9 @@ class DeepgramClient {
 
       this.mediaRecorder.start(100); // Send chunks every 100ms
       this.isRecordingState = true;
+      console.log('[Deepgram] Recording started');
     } catch (err) {
+      console.error('[Deepgram] startRecording error:', err);
       throw err instanceof Error ? err : new Error(String(err));
     }
   }
@@ -85,6 +130,7 @@ class DeepgramClient {
     if (this.mediaRecorder && this.isRecordingState) {
       this.mediaRecorder.stop();
       this.isRecordingState = false;
+      console.log('[Deepgram] Recording stopped');
     }
 
     if (this.mediaStream) {
@@ -99,10 +145,16 @@ class DeepgramClient {
       this.ws.close();
       this.ws = null;
     }
+    this.onTranscriptCallback = null;
+    this.onErrorCallback = null;
   }
 
   isRecording(): boolean {
     return this.isRecordingState;
+  }
+
+  isConnected(): boolean {
+    return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
   }
 }
 

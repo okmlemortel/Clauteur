@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { api, SessionMessage, CaseTemplate } from '@/lib/api';
 import { editTracker } from '@/lib/editTracker';
+import { deepgramClient, TranscriptEvent } from '@/lib/deepgram';
 import { ChatPanel } from '@/components/chat/ChatPanel';
 import { WorkspacePanel } from '@/components/workspace/WorkspacePanel';
 import { SessionTimer } from '@/components/ui/SessionTimer';
@@ -210,21 +211,69 @@ export default function SessionPage() {
 
   const handleVoiceToggle = async () => {
     if (isVoiceRecording) {
+      // Stop recording
+      deepgramClient.stopRecording();
       setIsVoiceRecording(false);
-      // Stop recording and send transcript as message
-      if (voiceTranscript) {
-        await handleSendMessage(voiceTranscript);
+
+      // Send accumulated transcript as a message
+      if (voiceTranscript.trim()) {
+        await handleSendMessage(voiceTranscript.trim());
         setVoiceTranscript('');
       }
     } else {
-      setIsVoiceRecording(true);
-      // Start recording - in a real implementation, connect to Deepgram
-      // For now, this is a placeholder
+      // Start recording — connect to Deepgram via backend WebSocket
+      try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+          console.error('No auth token for voice');
+          return;
+        }
+
+        // Connect to backend WebSocket proxy
+        await deepgramClient.connect(
+          token,
+          (event: TranscriptEvent) => {
+            if (event.isFinal && event.text) {
+              // Append final transcript
+              setVoiceTranscript((prev) => {
+                const separator = prev ? ' ' : '';
+                return prev + separator + event.text;
+              });
+            } else if (!event.isFinal && event.text) {
+              // Show interim result (optional — could display in UI)
+              console.log('[Voice] interim:', event.text);
+            }
+          },
+          (err: Error) => {
+            console.error('[Voice] Deepgram error:', err.message);
+            setIsVoiceRecording(false);
+          }
+        );
+
+        // Start capturing audio
+        await deepgramClient.startRecording();
+        setIsVoiceRecording(true);
+      } catch (err) {
+        console.error('[Voice] Failed to start recording:', err);
+        setIsVoiceRecording(false);
+        deepgramClient.disconnect();
+      }
     }
   };
 
+  // Cleanup Deepgram on unmount
+  useEffect(() => {
+    return () => {
+      deepgramClient.disconnect();
+    };
+  }, []);
+
   const handleEndSession = async () => {
     if (!sessionId) return;
+
+    // Clean up voice
+    deepgramClient.disconnect();
+    setIsVoiceRecording(false);
 
     try {
       const editLog = editTracker.getEvents();

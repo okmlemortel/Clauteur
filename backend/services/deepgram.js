@@ -1,105 +1,100 @@
-const { createClient } = require('@deepgram/sdk');
+const { DeepgramClient } = require('@deepgram/sdk');
 
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
 
 /**
  * Create a Deepgram WebSocket connection for streaming audio transcription
+ * Uses Deepgram SDK v5 API: client.listen.v1.connect()
  * @param {Function} onTranscript - Callback for transcript events
  * @param {Function} onError - Callback for errors
  * @returns {Object} Connection object with send() and close() methods
  */
 function createDeepgramConnection(onTranscript, onError) {
-  let connection = null;
-  let isConnected = false;
-
-  // Initialize Deepgram client only if API key is present
+  // If no API key, return a no-op stub
   if (!DEEPGRAM_API_KEY) {
     console.warn('DEEPGRAM_API_KEY not set. Voice transcription will not work.');
     return {
-      send: (audioBuffer) => {
-        console.warn('Deepgram not configured. Cannot send audio.');
-      },
-      close: () => {
-        console.warn('Deepgram connection not available.');
-      }
+      send: () => { console.warn('Deepgram not configured.'); },
+      close: () => {},
+      isConnected: () => false
     };
   }
 
-  try {
-    const deepgram = createClient({
-      apiKey: DEEPGRAM_API_KEY
-    });
+  let connection = null;
+  let isConnected = false;
 
-    // Create live connection
+  try {
+    const client = new DeepgramClient({ key: DEEPGRAM_API_KEY });
+
+    // Live transcription config
     const liveConfig = {
       model: 'nova-3',
-      language: 'multi',
+      language: 'multi',          // Auto-detect EN/FR
       smart_format: true,
       interim_results: true,
       endpointing: 300,
-      utterance_end_ms: 1000
+      utterance_end_ms: 1000,
+      encoding: 'linear16',
+      sample_rate: 16000
     };
 
-    // Open the connection
-    connection = deepgram.listen.live(liveConfig);
+    // Open live connection (SDK v5 API)
+    connection = client.listen.v1.connect(liveConfig);
+
+    connection.on('open', () => {
+      console.log('[Deepgram] Live connection opened');
+      isConnected = true;
+    });
 
     // Handle transcript events
-    connection.on('Results', (result) => {
-      const transcript = result?.result?.channel?.alternatives?.[0];
-      if (transcript) {
-        const isFinal = result?.result?.is_final || false;
-        const text = transcript.transcript || '';
-        const words = transcript.words || [];
-
-        if (onTranscript) {
+    connection.on('transcriptReceived', (rawMessage) => {
+      try {
+        const data = typeof rawMessage === 'string' ? JSON.parse(rawMessage) : rawMessage;
+        const result = data?.channel?.alternatives?.[0];
+        if (result && result.transcript) {
+          const isFinal = data.is_final || false;
           onTranscript({
-            text,
-            language: result?.result?.channel?.language || 'en',
+            text: result.transcript,
+            language: data.channel?.detected_language || 'en',
             isFinal,
-            words: words.map(w => ({
+            words: (result.words || []).map(w => ({
               word: w.word,
-              start: w.start_time,
-              end: w.end_time,
+              start: w.start,
+              end: w.end,
               confidence: w.confidence
             }))
           });
         }
+      } catch (err) {
+        console.error('[Deepgram] Parse error:', err);
       }
     });
 
     // Handle errors
-    connection.on('Error', (error) => {
-      console.error('Deepgram error:', error);
-      if (onError) {
-        onError(error);
-      }
+    connection.on('error', (error) => {
+      console.error('[Deepgram] Error:', error);
+      if (onError) onError(error);
     });
 
     // Handle close
-    connection.on('Close', () => {
-      console.log('Deepgram connection closed');
+    connection.on('close', () => {
+      console.log('[Deepgram] Connection closed');
       isConnected = false;
     });
 
-    isConnected = true;
   } catch (error) {
-    console.error('Failed to create Deepgram connection:', error);
-    if (onError) {
-      onError(error);
-    }
+    console.error('[Deepgram] Failed to create connection:', error);
+    if (onError) onError(error);
   }
 
-  // Return connection interface
   return {
     send: (audioBuffer) => {
       if (connection && isConnected) {
         try {
           connection.send(audioBuffer);
         } catch (error) {
-          console.error('Error sending audio to Deepgram:', error);
-          if (onError) {
-            onError(error);
-          }
+          console.error('[Deepgram] Send error:', error);
+          if (onError) onError(error);
         }
       }
     },
@@ -110,7 +105,7 @@ function createDeepgramConnection(onTranscript, onError) {
           connection.finish();
           isConnected = false;
         } catch (error) {
-          console.error('Error closing Deepgram connection:', error);
+          console.error('[Deepgram] Close error:', error);
         }
       }
     },

@@ -37,6 +37,7 @@ class DeepgramClient {
         }
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       this.ws.onerror = (event) => {
         onError(new Error('WebSocket error'));
       };

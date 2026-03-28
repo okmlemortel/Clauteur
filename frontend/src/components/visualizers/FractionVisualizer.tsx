@@ -24,7 +24,8 @@ function lcm(a: number, b: number): number {
   return (a * b) / gcd(a, b);
 }
 
-// Helper function: reduce fraction to lowest terms
+// Helper function: reduce fraction to lowest terms (used in common denominator display)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function reduceFraction(n: number, d: number): { n: number; d: number } {
   const g = gcd(n, d);
   return { n: n / g, d: d / g };
@@ -36,7 +37,6 @@ interface CircleVisualizerProps {
   denominator: number;
   color: string;
   size: number;
-  showDifference?: boolean;
   differenceHighlight?: boolean;
 }
 
@@ -45,7 +45,6 @@ function CircleVisualizer({
   denominator,
   color,
   size,
-  showDifference,
   differenceHighlight,
 }: CircleVisualizerProps) {
   const radius = size / 2;
@@ -106,7 +105,6 @@ interface BarVisualizerProps {
   color: string;
   width: number;
   height: number;
-  showDifference?: boolean;
   differenceHighlight?: boolean;
 }
 
@@ -119,7 +117,6 @@ function BarVisualizer({
   differenceHighlight,
 }: BarVisualizerProps) {
   const filledWidth = (numerator / denominator) * width;
-  const segmentWidth = width / denominator;
 
   return (
     <div className="relative" style={{ width, height }}>

@@ -7,6 +7,7 @@ interface CaseHeaderProps {
   skillTags?: string[];
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const CaseHeader: React.FC<CaseHeaderProps> = ({ title, skillTags = [] }) => {
   return (
     <div className="p-4 border-b border-slate-200 bg-slate-50">

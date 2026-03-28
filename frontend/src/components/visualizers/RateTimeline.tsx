@@ -23,6 +23,7 @@ export const RateTimeline: React.FC<RateTimelineProps> = ({
   label2 = 'Timeline 2',
   defaultRate1 = 3.5,
   defaultRate2 = 2,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   maxTimeRange = 60,
   onDataChange,
 }) => {
@@ -37,6 +38,7 @@ export const RateTimeline: React.FC<RateTimelineProps> = ({
 
   // Refs for animation
   const animationFrameRef = useRef<number | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const lastTimeRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
 

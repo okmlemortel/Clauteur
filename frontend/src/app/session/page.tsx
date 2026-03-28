@@ -37,6 +37,7 @@ export default function SessionPage() {
   // Voice state
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [voiceTargetField, setVoiceTargetField] = useState<string>('');
 
   // Field feedback

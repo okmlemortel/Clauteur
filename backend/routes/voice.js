@@ -79,9 +79,9 @@ function setupVoiceWebSocket(server) {
       isAlive = true;
     });
 
-    // Create Deepgram connection
+    // Create Deepgram connection (async — waits until Deepgram socket opens)
     try {
-      deepgramConnection = createDeepgramConnection(
+      deepgramConnection = await createDeepgramConnection(
         // onTranscript callback
         (transcript) => {
           if (ws.readyState === WebSocket.OPEN) {
@@ -103,7 +103,9 @@ function setupVoiceWebSocket(server) {
         }
       );
 
-      // Send connection confirmation
+      console.log('[Voice] Deepgram connection ready, isConnected:', deepgramConnection.isConnected());
+
+      // Send connection confirmation only after Deepgram is ready
       ws.send(JSON.stringify({
         type: 'connection',
         status: 'connected'
@@ -112,7 +114,7 @@ function setupVoiceWebSocket(server) {
       console.error('Failed to create Deepgram connection:', error);
       ws.send(JSON.stringify({
         type: 'error',
-        message: 'Failed to initialize transcription'
+        message: `Failed to initialize transcription: ${error?.message || 'unknown'}`
       }));
       ws.close(1011, 'Internal server error');
       return;
@@ -138,10 +140,10 @@ function setupVoiceWebSocket(server) {
         }
       } else if (data instanceof Buffer) {
         // Binary audio data - forward to Deepgram
-        if (deepgramConnection && deepgramConnection.isConnected?.()) {
+        if (deepgramConnection) {
           deepgramConnection.send(data);
         } else {
-          console.warn('Deepgram connection not available, dropping audio');
+          console.warn('[Voice] Deepgram connection not available, dropping audio');
         }
       }
     });

@@ -122,7 +122,7 @@ router.post('/start', authenticateToken, async (req, res) => {
       studentProfile,
       caseTemplate,
       startedAt: Date.now(),
-      mode,
+      mode: 'detective',
       messages: [
         {
           role: 'assistant',

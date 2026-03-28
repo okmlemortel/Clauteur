@@ -324,10 +324,11 @@ export default function SessionPage() {
               isLoading={isLoading}
               isNarrow={false}
               placeholder="Type your message..."
-              emptyStateTitle="Hello! 👋"
+              emptyStateTitle="Hello!"
               emptyStateDescription="Ready to learn?"
               isVoiceRecording={isVoiceRecording}
               onVoiceToggle={handleVoiceToggle}
+              voiceTranscript={voiceTranscript}
             />
           </div>
         </div>
@@ -370,6 +371,7 @@ export default function SessionPage() {
                 placeholder="Your response..."
                 isVoiceRecording={isVoiceRecording}
                 onVoiceToggle={handleVoiceToggle}
+                voiceTranscript={voiceTranscript}
               />
             </div>
 

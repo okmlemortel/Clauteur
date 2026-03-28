@@ -21,6 +21,7 @@ interface ChatPanelProps {
   emptyStateDescription?: string;
   isVoiceRecording?: boolean;
   onVoiceToggle?: () => void;
+  voiceTranscript?: string;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -29,10 +30,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   isLoading,
   isNarrow = false,
   placeholder = 'Écris ta question ici...',
-  emptyStateTitle = 'Dis bonjour pour commencer ! 👋',
+  emptyStateTitle = 'Dis bonjour pour commencer !',
   emptyStateDescription = 'Pose tes questions ou demande de l\'aide sur un sujet',
   isVoiceRecording = false,
   onVoiceToggle,
+  voiceTranscript = '',
 }) => {
   const [input, setInput] = React.useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -105,6 +107,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         )}
       </div>
 
+      {/* Voice Transcript Preview */}
+      {isVoiceRecording && voiceTranscript && (
+        <div className="mx-4 mb-2 px-4 py-2 bg-red-50 border border-red-200 rounded-xl">
+          <p className="text-sm text-slate-700 italic">{voiceTranscript}</p>
+        </div>
+      )}
+
+      {/* Recording indicator */}
+      {isVoiceRecording && !voiceTranscript && (
+        <div className="mx-4 mb-2 px-4 py-2 bg-red-50 border border-red-200 rounded-xl">
+          <p className="text-sm text-red-500 italic animate-pulse">Listening... speak now</p>
+        </div>
+      )}
+
       {/* Input Area */}
       <div className={`border-t ${isNarrow ? 'border-slate-200 bg-white' : ''} p-4`}>
         <form onSubmit={handleSubmit} className="flex gap-3">
@@ -112,8 +128,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={placeholder}
-            disabled={isLoading}
+            placeholder={isVoiceRecording ? 'Recording... click mic to stop & send' : placeholder}
+            disabled={isLoading || isVoiceRecording}
             className="flex-1 px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition disabled:bg-slate-100 disabled:cursor-not-allowed text-sm"
           />
           {onVoiceToggle && (
@@ -125,14 +141,17 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           )}
           <button
             type="submit"
-            disabled={isLoading || !input.trim()}
+            disabled={isLoading || isVoiceRecording || !input.trim()}
             className="px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:from-teal-700 hover:to-teal-600"
           >
             Send
           </button>
         </form>
         <p className="text-xs text-slate-500 mt-2 text-center">
-          Le tuteur y répondra en quelques secondes
+          {isVoiceRecording
+            ? 'Click the mic button again to stop and send your message'
+            : 'Le tuteur y répondra en quelques secondes'
+          }
         </p>
       </div>
     </div>

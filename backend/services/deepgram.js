@@ -3,34 +3,33 @@ const { DeepgramClient } = require('@deepgram/sdk');
 const DEEPGRAM_API_KEY = process.env.DEEPGRAM_API_KEY;
 
 /**
- * Create a Deepgram WebSocket connection for streaming audio transcription
- * Returns a Promise that resolves when the connection is ready.
+ * Create a Deepgram WebSocket connection for streaming audio transcription.
+ *
+ * SDK v5 flow:
+ *   1. const connection = await client.listen.v1.connect(config)
+ *   2. connection.connect()
+ *   3. await connection.waitForOpen()
+ *   4. connection.socket.send(audioData)
+ *   5. Events: on('open'), on('message') where data.type === 'Results'
  *
  * @param {Function} onTranscript - Callback for transcript events
  * @param {Function} onError - Callback for errors
- * @returns {Promise<Object>} Connection object with send() and close() methods
+ * @returns {Promise<Object>} Connection object with send() and close()
  */
 async function createDeepgramConnection(onTranscript, onError) {
-  // If no API key, return a no-op stub
   if (!DEEPGRAM_API_KEY) {
     console.warn('[Deepgram] DEEPGRAM_API_KEY not set.');
-    return {
-      send: () => {},
-      close: () => {},
-      isConnected: () => false
-    };
+    return { send: () => {}, close: () => {}, isConnected: () => false };
   }
 
-  let socket = null;
+  let connection = null;
   let isConnected = false;
-  const audioBuffer = []; // Buffer audio until connection opens
 
   try {
     const client = new DeepgramClient({ apiKey: DEEPGRAM_API_KEY });
 
-    // Live transcription config
-    // Do NOT specify encoding/sample_rate — let Deepgram auto-detect from webm/opus stream
-    socket = await client.listen.v1.connect({
+    // Create the connection object
+    connection = await client.listen.v1.connect({
       model: 'nova-3',
       language: 'multi',
       smart_format: true,
@@ -39,94 +38,75 @@ async function createDeepgramConnection(onTranscript, onError) {
       utterance_end_ms: 1000,
     });
 
-    // Wait for the socket to actually open
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Deepgram connection timeout')), 10000);
-
-      socket.on('open', () => {
-        console.log('[Deepgram] Live connection opened');
-        isConnected = true;
-        clearTimeout(timeout);
-
-        // Flush any buffered audio
-        while (audioBuffer.length > 0) {
-          const chunk = audioBuffer.shift();
-          try { socket.sendMedia(chunk); } catch (e) { /* ignore */ }
-        }
-
-        resolve();
-      });
-
-      socket.on('error', (error) => {
-        clearTimeout(timeout);
-        console.error('[Deepgram] Connection error:', error?.message || error);
-        reject(error);
-      });
+    // Register event handlers BEFORE connecting
+    connection.on('open', () => {
+      console.log('[Deepgram] Live connection opened');
+      isConnected = true;
     });
 
-    // Handle transcript messages
-    socket.on('message', (data) => {
+    connection.on('message', (data) => {
       try {
-        const result = data?.channel?.alternatives?.[0];
-        if (result && result.transcript) {
-          const isFinal = data.is_final || false;
-          onTranscript({
-            text: result.transcript,
-            language: data.channel?.detected_language || 'en',
-            isFinal,
-            words: (result.words || []).map(w => ({
-              word: w.word,
-              start: w.start,
-              end: w.end,
-              confidence: w.confidence
-            }))
-          });
+        // Transcript results have type "Results"
+        if (data?.type === 'Results') {
+          const result = data?.channel?.alternatives?.[0];
+          if (result && result.transcript) {
+            onTranscript({
+              text: result.transcript,
+              language: data.channel?.detected_language || 'en',
+              isFinal: data.is_final || false,
+              words: (result.words || []).map(w => ({
+                word: w.word,
+                start: w.start,
+                end: w.end,
+                confidence: w.confidence
+              }))
+            });
+          }
         }
       } catch (err) {
         console.error('[Deepgram] Parse error:', err);
       }
     });
 
-    // Handle late errors (after open)
-    socket.on('error', (error) => {
-      console.error('[Deepgram] Runtime error:', error?.message || error);
+    connection.on('error', (error) => {
+      console.error('[Deepgram] Error:', error?.message || error);
       isConnected = false;
-      if (onError) onError(error);
+      if (onError) onError(error instanceof Error ? error : new Error(String(error)));
     });
 
-    socket.on('close', () => {
+    connection.on('close', () => {
       console.log('[Deepgram] Connection closed');
       isConnected = false;
     });
 
+    // Actually open the WebSocket
+    connection.connect();
+
+    // Wait until the WebSocket is ready
+    await connection.waitForOpen();
+    console.log('[Deepgram] Connection ready');
+
   } catch (error) {
     console.error('[Deepgram] Failed to create connection:', error?.message || error);
-    if (onError) onError(error);
-    return {
-      send: () => {},
-      close: () => {},
-      isConnected: () => false
-    };
+    if (onError) onError(error instanceof Error ? error : new Error(String(error)));
+    return { send: () => {}, close: () => {}, isConnected: () => false };
   }
 
   return {
-    send: (data) => {
-      if (isConnected && socket) {
+    send: (audioData) => {
+      if (isConnected && connection?.socket) {
         try {
-          socket.sendMedia(data);
+          connection.socket.send(audioData);
         } catch (error) {
           console.error('[Deepgram] Send error:', error);
         }
-      } else {
-        // Buffer audio until connection opens
-        audioBuffer.push(data);
       }
     },
 
     close: () => {
-      if (socket) {
+      if (connection) {
         try {
-          socket.sendCloseStream();
+          connection.close();
           isConnected = false;
         } catch (error) {
           console.error('[Deepgram] Close error:', error);
@@ -138,6 +118,4 @@ async function createDeepgramConnection(onTranscript, onError) {
   };
 }
 
-module.exports = {
-  createDeepgramConnection
-};
+module.exports = { createDeepgramConnection };

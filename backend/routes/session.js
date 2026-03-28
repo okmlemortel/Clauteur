@@ -22,49 +22,53 @@ const MAX_SESSION_DURATION_MINUTES = 20;
  * Returns: { session_id, case, greeting }
  */
 router.post('/start', authenticateToken, async (req, res) => {
+  let lastStep = 0;
   try {
+    lastStep = 1;
     console.log('[session/start] Step 1: User from token:', JSON.stringify(req.user));
 
     const studentId = req.user.role === 'parent'
       ? (await memory.getStudentFromParent(req.user.userId))?.id
       : req.user.userId;
 
+    lastStep = 2;
     console.log('[session/start] Step 2: studentId resolved:', studentId);
 
     if (!studentId) {
       return res.status(400).json({ error: 'Student ID could not be determined' });
     }
 
-    const { mode = 'PROGRAMME' } = req.body;
-
     // Get student profile
     let studentProfile;
     try {
       studentProfile = await memory.getStudentProfile(studentId);
+      lastStep = 3;
       console.log('[session/start] Step 3: profile loaded:', studentProfile?.id);
     } catch (error) {
       console.error('[session/start] Step 3 FAIL: profile error:', error);
-      return res.status(404).json({ error: 'Student profile not found' });
+      return res.status(404).json({ error: 'Student profile not found', step: 3, detail: error?.message });
     }
 
     // Get skill map for the student
     const skillMap = await memory.getSkillMap(studentId);
     studentProfile.skill_map = skillMap;
+    lastStep = 4;
     console.log('[session/start] Step 4: skillMap loaded, keys:', Object.keys(skillMap).length);
 
     // Select next case using caseSelector
     const caseTemplate = await caseSelector.selectNextCase(studentId);
+    lastStep = 5;
     console.log('[session/start] Step 5: case selected:', caseTemplate?.id, caseTemplate?.title);
     if (!caseTemplate) {
-      return res.status(400).json({ error: 'No suitable case available for this student' });
+      return res.status(400).json({ error: 'No suitable case available for this student', step: 5 });
     }
 
     // Create session in database
+    lastStep = 6;
     console.log('[session/start] Step 6: creating session...');
     const sessionData = await memory.createSession({
       student_id: studentId,
       case_template_id: caseTemplate.id,
-      mode,
       casefile: {
         given: null,
         problem: null,
@@ -77,6 +81,7 @@ router.post('/start', authenticateToken, async (req, res) => {
       language_analysis: {}
     });
 
+    lastStep = 7;
     console.log('[session/start] Step 7: session created:', sessionData.id);
 
     // Build system prompt
@@ -84,6 +89,7 @@ router.post('/start', authenticateToken, async (req, res) => {
       sessionStartTime: sessionData.started_at
     });
 
+    lastStep = 8;
     console.log('[session/start] Step 8: system prompt built, length:', systemPrompt.length);
 
     // Generate initial greeting
@@ -147,8 +153,12 @@ router.post('/start', authenticateToken, async (req, res) => {
       greeting: initialGreeting.message
     });
   } catch (error) {
-    console.error('[session/start] CRASH at unknown step:', error?.message || error, error?.stack || '');
-    res.status(error.status || 500).json({ error: error.message || 'Failed to start session' });
+    console.error('[session/start] CRASH at step', lastStep, ':', error?.message || error, error?.stack || '');
+    res.status(error.status || 500).json({
+      error: error.message || 'Failed to start session',
+      failedAtStep: lastStep,
+      detail: error?.stack?.split('\n')[0] || null
+    });
   }
 });
 

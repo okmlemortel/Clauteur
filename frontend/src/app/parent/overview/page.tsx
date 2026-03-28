@@ -2,38 +2,20 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
-import { api } from '@/lib/api';
+import { api, SessionReport } from '@/lib/api';
 import Link from 'next/link';
-
-interface Session {
-  session_id: string;
-  started_at: string;
-  ended_at: string;
-  duration: number;
-  engagement: number;
-  notable_moment: string;
-  observations: {
-    strengths: string[];
-    blockers: string[];
-    cognitive_signals: string[];
-  };
-  next_session: string;
-  parent_action: string;
-}
-
-interface Alert {
-  alertId: string;
-  studentId: string;
-  level: 1 | 2 | 3;
-  message: string;
-  createdAt: string;
-  read: boolean;
-}
 
 export default function OverviewPage() {
   const { user } = useAuth();
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [sessions, setSessions] = useState<SessionReport[]>([]);
+  const [alerts, setAlerts] = useState<Array<{
+    alertId: string;
+    studentId: string;
+    level: 1 | 2 | 3;
+    message: string;
+    createdAt: string;
+    read: boolean;
+  }>>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -46,8 +28,8 @@ export default function OverviewPage() {
           api.getAlerts(user.userId),
         ]);
 
-        setSessions(sessionsData.slice(0, 5)); // Last 5 sessions
-        setAlerts(alertsData.filter((a) => !a.read)); // Only unread alerts
+        setSessions(sessionsData.slice(0, 5));
+        setAlerts(alertsData.filter((a) => !a.read));
       } catch (error) {
         console.error('Failed to load overview data:', error);
       } finally {
@@ -61,13 +43,13 @@ export default function OverviewPage() {
   const totalSessions = sessions.length;
   const totalMinutes = sessions.reduce((sum, s) => sum + s.duration, 0);
   const lastSessionDate = sessions[0]?.started_at
-    ? new Date(sessions[0].started_at).toLocaleDateString('fr-FR', {
+    ? new Date(sessions[0].started_at).toLocaleDateString('en-US', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
         day: 'numeric',
       })
-    : 'Aucune session';
+    : 'No sessions yet';
 
   const formatTime = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
@@ -104,8 +86,8 @@ export default function OverviewPage() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">Vue générale</h1>
-        <p className="text-slate-600">Suivi du progrès de votre enfant</p>
+        <h1 className="text-3xl font-bold text-slate-900 mb-2">Overview</h1>
+        <p className="text-slate-600">Track your child&apos;s progress</p>
       </div>
 
       {/* Summary Cards */}
@@ -113,38 +95,38 @@ export default function OverviewPage() {
         {/* Total Sessions Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-slate-600">Sessions totales</h3>
+            <h3 className="text-sm font-medium text-slate-600">Total Sessions</h3>
             <div className="text-2xl">📚</div>
           </div>
           <p className="text-3xl font-bold text-slate-900">{totalSessions}</p>
-          <p className="text-xs text-slate-500 mt-2">depuis le début</p>
+          <p className="text-xs text-slate-500 mt-2">overall</p>
         </div>
 
         {/* Total Minutes Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-slate-600">Temps d&apos;apprentissage</h3>
+            <h3 className="text-sm font-medium text-slate-600">Learning Time</h3>
             <div className="text-2xl">⏱️</div>
           </div>
           <p className="text-3xl font-bold text-slate-900">{formatTime(totalMinutes)}</p>
-          <p className="text-xs text-slate-500 mt-2">total d&apos;étude</p>
+          <p className="text-xs text-slate-500 mt-2">total study</p>
         </div>
 
         {/* Last Session Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-slate-600">Dernière session</h3>
+            <h3 className="text-sm font-medium text-slate-600">Last Session</h3>
             <div className="text-2xl">📅</div>
           </div>
           <p className="text-lg font-semibold text-slate-900 truncate">{lastSessionDate}</p>
-          <p className="text-xs text-slate-500 mt-2">dernier apprentissage</p>
+          <p className="text-xs text-slate-500 mt-2">most recent</p>
         </div>
       </div>
 
       {/* Active Alerts */}
       {alerts.length > 0 && (
         <div>
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Alertes actives</h2>
+          <h2 className="text-lg font-bold text-slate-900 mb-4">Active Alerts</h2>
           <div className="space-y-3">
             {alerts.slice(0, 3).map((alert) => (
               <div
@@ -158,12 +140,12 @@ export default function OverviewPage() {
                     alert.level
                   )}`}
                 >
-                  Niveau {alert.level}
+                  Level {alert.level}
                 </span>
                 <div className="flex-1">
                   <p className="font-medium text-sm">{alert.message}</p>
                   <p className="text-xs mt-1 opacity-75">
-                    {new Date(alert.createdAt).toLocaleDateString('fr-FR')}
+                    {new Date(alert.createdAt).toLocaleDateString('en-US')}
                   </p>
                 </div>
               </div>
@@ -174,7 +156,7 @@ export default function OverviewPage() {
               href="/parent/alerts"
               className="mt-4 inline-block text-sm font-medium text-indigo-600 hover:text-indigo-700"
             >
-              Voir toutes les alertes →
+              View all alerts →
             </Link>
           )}
         </div>
@@ -182,13 +164,13 @@ export default function OverviewPage() {
 
       {/* Recent Sessions */}
       <div>
-        <h2 className="text-lg font-bold text-slate-900 mb-4">Sessions récentes</h2>
+        <h2 className="text-lg font-bold text-slate-900 mb-4">Recent Sessions</h2>
         {isLoading ? (
-          <div className="text-center py-8 text-slate-500">Chargement...</div>
+          <div className="text-center py-8 text-slate-500">Loading...</div>
         ) : sessions.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 text-center text-slate-600">
-            <p className="mb-2">Aucune session pour le moment</p>
-            <p className="text-sm text-slate-500">Les sessions apparaîtront ici</p>
+            <p className="mb-2">No sessions yet</p>
+            <p className="text-sm text-slate-500">Sessions will appear here</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -200,13 +182,13 @@ export default function OverviewPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <p className="font-medium text-slate-900">
-                      {new Date(session.started_at).toLocaleDateString('fr-FR', {
+                      {new Date(session.started_at).toLocaleDateString('en-US', {
                         weekday: 'short',
                         month: 'short',
                         day: 'numeric',
                       })}{' '}
-                      à{' '}
-                      {new Date(session.started_at).toLocaleTimeString('fr-FR', {
+                      at{' '}
+                      {new Date(session.started_at).toLocaleTimeString('en-US', {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}
@@ -214,10 +196,22 @@ export default function OverviewPage() {
                     {session.notable_moment && (
                       <p className="text-sm text-slate-600 mt-2">{session.notable_moment}</p>
                     )}
+                    {session.skills_practiced.length > 0 && (
+                      <div className="flex gap-1 mt-2">
+                        {session.skills_practiced.slice(0, 3).map((skill, idx) => (
+                          <span
+                            key={idx}
+                            className="text-xs bg-teal-100 text-teal-700 px-2 py-1 rounded-full"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-slate-900">{session.duration}m</p>
-                    <p className="text-xs text-slate-500">durée</p>
+                    <p className="text-xs text-slate-500">duration</p>
                   </div>
                 </div>
               </div>
@@ -228,7 +222,7 @@ export default function OverviewPage() {
           href="/parent/reports"
           className="mt-4 inline-block text-sm font-medium text-indigo-600 hover:text-indigo-700"
         >
-          Voir tous les rapports →
+          View all reports →
         </Link>
       </div>
     </div>

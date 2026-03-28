@@ -6,64 +6,83 @@
 
 ## 🔴 EN ATTENTE D'ACTION
 
-### [2026-03-26] — Olivier
-**Tâche** : Configurer Supabase + Railway + Vercel
+### [2026-03-28] — Olivier
+**Tâche** : Commit + push Sprint 1 v3 sur GitHub
+**Type** : infra
+**Priorité** : Haute
+**Instructions** : Le code v3 a été généré localement. Doit être commité et poussé.
+**Statut** : ⏳ En attente
+
+### [2026-03-28] — Olivier
+**Tâche** : Configurer Supabase + Railway + Vercel pour v3
 **Type** : infra
 **Priorité** : Haute — bloque les tests en production
 **Instructions** :
-1. Créer le projet Supabase → exécuter `supabase/migrations/001_initial_schema.sql` (schéma simplifié : students, parents, sessions, knowledge_map, parent_alerts)
+1. Créer le projet Supabase → exécuter `supabase/migrations/001_initial_schema.sql` (tables: students, parents, skill_map, case_templates, sessions, parent_alerts)
 2. Créer le service Railway pour le backend (voir `docs/RAILWAY-SETUP.md`)
 3. Déployer le frontend sur Vercel
-4. Configurer les variables d'environnement (voir `.env.example` dans backend + frontend)
-5. Optionnel : ajouter ANTHROPIC_API_KEY pour activer le vrai Claude (sinon le stub intelligent fonctionne)
-6. Tester le flow complet (voir checklist validation ci-dessous)
+4. Variables d'environnement requises :
+   - `ANTHROPIC_API_KEY` (clé prête)
+   - `DEEPGRAM_API_KEY` (clé prête)
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
+   - `JWT_SECRET`
+5. Tester le flow complet (voir checklist validation ci-dessous)
 **Référence** : docs/RAILWAY-SETUP.md, backend/.env.example, frontend/.env.local.example
 **Statut** : ⏳ En attente
 
-### [2026-03-26] — Olivier
-**Tâche** : Commit + push du code Sprint 1 sur GitHub
-**Type** : infra
-**Priorité** : Haute
-**Instructions** : Le code a été généré localement. Il doit être commité et poussé sur le repo GitHub.
+### [2026-03-28] — Claude.ai
+**Tâche** : Fournir les case templates supplémentaires
+**Type** : contenu pédagogique
+**Priorité** : Moyenne — 2 templates seed existent déjà
+**Instructions** : Créer 5-10 case templates couvrant les skills fragiles/untested d'Olivia. Insérer via SQL dans case_templates.
 **Statut** : ⏳ En attente
 
 ---
 
 ## 🟡 EN COURS
 
-*(rien en cours — en attente du déploiement par Olivier)*
+*(rien en cours — build v3 terminé, en attente déploiement)*
 
 ---
 
 ## ✅ COMPLÉTÉ
 
-### [2026-03-26] — Cowork
-**Tâche** : Sprint 1 MVP v2 — Rebuild complet selon spec Claude.ai
+### [2026-03-28] — Cowork
+**Tâche** : Sprint 1 v3 — Rebuild complet post-diagnostic
 **Type** : infra + feature
-**Source** : Design spec Claude.ai 2026-03-26 — "Sprint 1 Design Review & Spec"
-**Changements vs v1** :
-- Session split-panel : chat gauche (280px) + workspace droite (flex)
-- "Morphing session" : warm-up → mode selector → workspace → explanation → connection
-- Phase indicator : ● concret  ○ visuel  ○ symbolique
-- Claude service : vrai appel API (claude-sonnet-4-20250514) + fallback stub intelligent
-- Réponses structurées JSON : message + phase + alertLevel + cognitiveNotes
-- System prompt dynamique (services/systemPrompt.js)
-- Générateur de rapports parents (services/reportGenerator.js)
-- Auth simplifié : un seul code → rôle déduit (ELEVE-xxx = student, PARENT-xxx = parent)
-- Schéma DB simplifié : students, parents, sessions, knowledge_map, parent_alerts
-- Timer session : 40 min (au lieu de 35)
-**Fichiers** :
-- /frontend/ — 16 fichiers (pages + composants + lib)
-  - Session page split-panel avec ModeSelector, WorkspacePanel, PhaseIndicator
-  - ChatPanel réutilisable (mode large + narrow)
-  - Parent dashboard mis à jour pour nouveau format de rapport
-- /backend/ — 12 fichiers
-  - services/ : claude.js, systemPrompt.js, reportGenerator.js, memory.js, alerts.js, supabase.js
-  - routes/ : auth.js, session.js, reports.js, analysis.js
-  - middleware/ : auth.js
-- /supabase/migrations/001_initial_schema.sql — schéma simplifié + seed data
-**Validation** : Backend syntax OK (12/12 fichiers), Frontend TypeScript OK (0 erreurs)
+**Source** : Design spec Claude.ai 2026-03-28 — "Updated Sprint 1 Spec" (post sessions diagnostiques avec Olivia)
+**Changements majeurs vs v2** :
+- Modèle de session : Plan/Solve/Explain (remplace Concret/Visuel/Symbolique)
+- CaseFile G/P/S : composant central — carnet de détective avec 4 champs
+- Verrouillage de champs par phase (plan = Given+Problem actifs, solve = Solution active, explain = Explanation active)
+- Edit tracker : suivi invisible keystroke/timing/pauses pour analyse cognitive
+- Voice : intégration Deepgram Nova-3 (WebSocket streaming, pas Whisper)
+- Deux agents Claude : Tutor (Sonnet) + Language Agent (Haiku, async)
+- Case selector : moteur de priorité basé sur skill_map
+- Timer : 15-20 min (au lieu de 40)
+- Schéma DB v3 : skill_map, case_templates (avec 2 cases seed), sessions enrichies
+- Profil Olivia mis à jour (English-dominant, detective/mystery anchor, G/P/S framework)
+**Fichiers backend** (18 fichiers, tous syntax OK) :
+- services/ : tutor.js, languageAgent.js, caseSelector.js, deepgram.js, systemPrompt.js, reportGenerator.js, memory.js, alerts.js, claude.js, supabase.js
+- routes/ : auth.js, session.js, cases.js, reports.js, analysis.js, voice.js (WebSocket)
+- middleware/ : auth.js
+- index.js (HTTP + WebSocket server)
+**Fichiers frontend** (19 fichiers, 0 erreurs TypeScript) :
+- Nouveau : CaseFile.tsx, CaseHeader.tsx, VoiceButton.tsx, editTracker.ts, deepgram.ts
+- Réécrit : session/page.tsx, PhaseIndicator.tsx, WorkspacePanel.tsx, SessionTimer.tsx, api.ts, ChatPanel.tsx
+- Mis à jour : parent overview + reports pages
+**Supabase** : 001_initial_schema.sql — 6 tables + seed data (Olivia profile + 28 skills + 2 case templates)
+**Validation** : Backend 18/18 syntax OK, Frontend 0 TypeScript errors
 **Statut** : ✅ Build terminé — en attente commit + déploiement
+
+### [2026-03-26] — Cowork
+**Tâche** : Sprint 1 MVP v2 — Rebuild selon première spec Claude.ai
+**Type** : infra + feature
+**Statut** : ✅ Remplacé par v3
+
+### [2026-03-26] — Cowork
+**Tâche** : Sprint 1 MVP v1 — Build initial frontend + backend
+**Statut** : ✅ Remplacé par v2 puis v3
 
 ### [2026-03-26] — Claude.ai + Olivier
 **Tâche** : Initialisation du repo — fichiers fondateurs
@@ -99,11 +118,13 @@
 
 ---
 
-## 🧩 COMPOSANTS PÉDAGOGIQUES — FILE D'ATTENTE
+## 🧩 CASE TEMPLATES — FILE D'ATTENTE
 
-| Composant | Concept | Ancrage | Généré | Intégré | Déployé |
-|-----------|---------|---------|--------|---------|---------|
-| *(à venir après sessions de diagnostic)* | | | | | |
+| Case | Skills ciblées | Ancrage | Difficulté | Langue explain | Status |
+|------|---------------|---------|------------|----------------|--------|
+| The Baker's Dilemma | fractions_as_reasoning, justification_depth, written_structure | cooking | 2 | fr | ✅ Seed |
+| The Missing Concert Tickets | fractions_as_reasoning, sequencing, justification_depth | mystery | 2 | fr | ✅ Seed |
+| *(à venir — Claude.ai doit fournir 5-10 templates supplémentaires)* | | | | | |
 
 ---
 
@@ -116,44 +137,55 @@
 ## 📝 NOTES INTER-AGENTS
 
 ### Pour Cowork
-- Les composants dans /pending/lessons/ arrivent de Claude.ai via Olivier
-- Ne pas modifier la logique fonctionnelle des composants — intégration uniquement
-- Props standard dans CONTEXT.md section "Composants pédagogiques"
-- En cas de doute sur l'intégration : créer une issue GitHub et taguer Olivier
+- Le modèle de session est maintenant Plan/Solve/Explain (G/P/S)
+- Les case templates sont dans Supabase, pas dans le code
+- Le tutor agent (Sonnet) et le language agent (Haiku) tournent en parallèle
+- Voice via Deepgram WebSocket — audio jamais stocké, seulement transcriptions
+- Edit tracker capture les frappes/pauses — données pour l'analyse cognitive (Sprint 2)
 
 ### Pour Claude.ai
-- Consulter student-profile.json avant chaque session
-- Mettre à jour COMMUNICATION.md après chaque composant généré
-- Format du script de push dans CONTEXT.md section "Workflow inter-agents"
-- Les figma-links.md sont mis à jour par Olivier après design Figma
+- Profil Olivia mis à jour : English-dominant, G/P/S framework, detective anchor
+- Fournir les case templates via SQL INSERT dans case_templates
+- Le system prompt est dans backend/services/systemPrompt.js — ne pas modifier
+- Language agent prompt dans backend/services/languageAgent.js
 
 ### Pour Olivier
 - Tu es le seul à merger les PRs
 - Les alertes niveau 3 te sont notifiées hors de ce fichier (push + SMS)
-- student-profile.json se met à jour automatiquement via n8n après chaque session
+- Clés API requises : ANTHROPIC_API_KEY + DEEPGRAM_API_KEY
 - Review hebdomadaire recommandée : vendredi soir
 
 ---
 
-## ✅ CHECKLIST DE VALIDATION — Sprint 1
+## ✅ CHECKLIST DE VALIDATION — Sprint 1 v3
 
 ```
-1. [ ] Élève se connecte avec "ELEVE-001"
-2. [ ] Voit l'interface session — chat plein écran (warm-up)
-3. [ ] Claude la salue chaleureusement
-4. [ ] Elle choisit un mode : "Session du jour"
-5. [ ] Le workspace s'ouvre à droite, le chat passe à gauche
-6. [ ] Phase indicator : ● concret  ○ visuel  ○ symbolique
-7. [ ] Elle échange avec Claude, réponses structurées JSON
-8. [ ] Les transitions de phase arrivent via Claude
-9. [ ] Timer compte jusqu'à 40 min, warning à 35
-10. [ ] Session se termine → rapport parent généré
-11. [ ] Parent se connecte avec "PARENT-001"
-12. [ ] Voit le dashboard avec le rapport de session
-13. [ ] Rapport montre : engagement, moment notable, forces/blocages, signaux cognitifs
-14. [ ] Rapport montre : session suggérée + action parent
+1.  [ ] Olivia se connecte avec "ELEVE-001"
+2.  [ ] Voit le chat panel seul (warm-up)
+3.  [ ] Claude la salue, lui demande comment va sa journée (2-3 échanges)
+4.  [ ] Claude présente un case detective
+5.  [ ] Le workspace slide in — CaseFile avec champs G/P/S
+6.  [ ] Phase indicator : ● plan  ○ solve  ○ explain
+7.  [ ] Olivia tape son plan dans Given + Problem
+8.  [ ] Claude lit le plan, peut poser une question
+9.  [ ] Claude signale transition → ○ plan  ● solve  ○ explain
+10. [ ] Champ Solution déverrouillé, Given/Problem verrouillés
+11. [ ] Olivia résout (texte ou voix — Deepgram transcrit)
+12. [ ] Claude signale transition → ○ plan  ○ solve  ● explain
+13. [ ] Champ Explanation déverrouillé
+14. [ ] Claude demande d'expliquer en français
+15. [ ] Elle tape ou parle son explication
+16. [ ] Claude pose une question de suivi
+17. [ ] Session se termine — timer ou Claude conclut
+18. [ ] Edit log + données sauvegardées dans Supabase
+19. [ ] Rapport parent généré
+
+20. [ ] Parent se connecte avec "PARENT-001"
+21. [ ] Voit le dashboard avec le rapport
+22. [ ] Rapport montre : skills pratiquées, qualité du plan, solution correcte,
+        qualité explication, nouveaux connecteurs, moment notable, action parent
 ```
 
 ---
 
-*Dernière mise à jour : 2026-03-26 — Sprint 1 v2 rebuild par Cowork (spec Claude.ai)*
+*Dernière mise à jour : 2026-03-28 — Sprint 1 v3 build par Cowork (spec post-diagnostic Claude.ai)*

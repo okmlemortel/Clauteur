@@ -9,7 +9,7 @@ interface SessionTimerProps {
 
 export const SessionTimer: React.FC<SessionTimerProps> = ({
   startTime,
-  maxMinutes = 40,
+  maxMinutes = 20,
 }) => {
   const [elapsed, setElapsed] = useState(0);
 
@@ -26,14 +26,14 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
   const minutes = Math.floor(elapsed / 60);
   const seconds = elapsed % 60;
   const maxSeconds = maxMinutes * 60;
-  const isWarning = elapsed >= maxSeconds * 0.875; // Warning at 87.5% (35min for 40min session)
+  const isWarning = elapsed >= maxSeconds * 0.75; // Warning at 75% (15min for 20min session)
   const isExpired = elapsed >= maxSeconds;
   const percentage = Math.min((elapsed / maxSeconds) * 100, 100);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-slate-700">Durée de la session</span>
+        <span className="text-xs font-medium text-slate-600">Time remaining</span>
         <span
           className={`text-sm font-mono font-semibold ${
             isExpired
@@ -46,27 +46,23 @@ export const SessionTimer: React.FC<SessionTimerProps> = ({
           {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
         </span>
       </div>
-      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
         <div
           className={`h-full transition-all duration-300 ${
             isExpired
               ? 'bg-gradient-to-r from-red-500 to-red-600'
               : isWarning
                 ? 'bg-gradient-to-r from-orange-400 to-orange-500'
-                : 'bg-gradient-to-r from-indigo-500 to-indigo-600'
+                : 'bg-gradient-to-r from-teal-500 to-teal-600'
           }`}
           style={{ width: `${percentage}%` }}
         />
       </div>
       {isExpired && (
-        <p className="text-xs text-red-600 font-medium">
-          ⏱️ La session a expiré
-        </p>
+        <p className="text-xs text-red-600 font-medium">Session expired</p>
       )}
       {isWarning && !isExpired && (
-        <p className="text-xs text-orange-600 font-medium">
-          ⚠️ La session arrive bientôt à sa fin
-        </p>
+        <p className="text-xs text-orange-600 font-medium">Time running low</p>
       )}
     </div>
   );

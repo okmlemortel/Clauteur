@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { ChatBubble } from '../ui/ChatBubble';
+import { VoiceButton } from './VoiceButton';
 
 export interface Message {
   id: string;
@@ -18,6 +19,8 @@ interface ChatPanelProps {
   placeholder?: string;
   emptyStateTitle?: string;
   emptyStateDescription?: string;
+  isVoiceRecording?: boolean;
+  onVoiceToggle?: () => void;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({
@@ -28,6 +31,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   placeholder = 'Écris ta question ici...',
   emptyStateTitle = 'Dis bonjour pour commencer ! 👋',
   emptyStateDescription = 'Pose tes questions ou demande de l\'aide sur un sujet',
+  isVoiceRecording = false,
+  onVoiceToggle,
 }) => {
   const [input, setInput] = React.useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -109,14 +114,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             onChange={(e) => setInput(e.target.value)}
             placeholder={placeholder}
             disabled={isLoading}
-            className="flex-1 px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition disabled:bg-slate-100 disabled:cursor-not-allowed text-sm"
+            className="flex-1 px-4 py-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition disabled:bg-slate-100 disabled:cursor-not-allowed text-sm"
           />
+          {onVoiceToggle && (
+            <VoiceButton
+              isRecording={isVoiceRecording}
+              onToggle={onVoiceToggle}
+              disabled={isLoading}
+            />
+          )}
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-indigo-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:from-indigo-700 hover:to-indigo-600"
+            className="px-6 py-3 bg-gradient-to-r from-teal-600 to-teal-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:from-teal-700 hover:to-teal-600"
           >
-            Envoyer
+            Send
           </button>
         </form>
         <p className="text-xs text-slate-500 mt-2 text-center">

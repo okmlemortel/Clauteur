@@ -1,92 +1,130 @@
 /**
- * System Prompt Builder
- * Constructs dynamic system prompts from student profiles and session context
+ * System Prompt Builder for v3 Design Spec
+ * Constructs dynamic system prompts from student profiles, case templates, and session config
  */
 
 /**
- * Build dynamic system prompt for a student
- * @param {Object} studentProfile - Student profile data from database
- * @param {string} mode - Session mode (DIAGNOSTIC, FONDATIONS, PROGRAMME, EXPLORATION)
- * @param {Array} recentSessions - Last 3 sessions
- * @returns {string} System prompt for Claude API
+ * Build the full system prompt for a tutoring session
+ * @param {Object} studentProfile - Student profile from database
+ * @param {Object} caseTemplate - Case template with narrative, plan_prompt, etc.
+ * @param {Object} sessionConfig - Session configuration object
+ * @returns {string} Full system prompt for Claude API
  */
-function buildSystemPrompt(studentProfile, mode = 'PROGRAMME', recentSessions = []) {
+function build(studentProfile, caseTemplate, sessionConfig) {
   if (!studentProfile) {
     throw new Error('Student profile is required');
+  }
+  if (!caseTemplate) {
+    throw new Error('Case template is required');
   }
 
   const {
     first_name = 'Élève',
     age = 13,
-    languages = ['french', 'english'],
+    languages = ['french'],
     interests = [],
-    struggle_patterns = [],
     frustration_threshold = 'medium',
     cognitive_strengths = [],
-    session_objective = 'Work on foundational concepts'
+    skill_map = {}
   } = studentProfile;
 
+  const {
+    title = 'Detective Case',
+    narrative = '',
+    plan_prompt = '',
+    explain_language = 'french',
+    target_skills = []
+  } = caseTemplate;
+
+  const {
+    sessionStartTime = new Date().toISOString()
+  } = sessionConfig || {};
+
   // Build language text
-  const languageText = languages.includes('french') && languages.includes('english')
-    ? 'Elle parle français et anglais'
+  const langText = languages.includes('french') && languages.includes('english')
+    ? 'French and English'
     : languages.includes('french')
-      ? 'Elle parle français'
-      : 'Elle parle anglais';
+      ? 'French'
+      : 'English';
 
   // Build interests text
   const interestsText = interests.length > 0
     ? interests.join(', ')
-    : 'les jeux, le sport, la musique et la cuisine';
+    : 'sports, games, music, cooking';
 
-  // Build struggle context
-  const struggleText = struggle_patterns.length > 0
-    ? `Elle a des lacunes accumulées en: ${struggle_patterns.join(', ')}. Sois patient avec ça.`
-    : 'Elle a des lacunes accumulées en maths et du mal à structurer et exprimer un raisonnement logique.';
+  // Build current skill levels
+  const skillLevelsText = target_skills.length > 0
+    ? `Current skill levels: ${target_skills.map(skillId => {
+        const score = skill_map[skillId] || 0;
+        const levelName = ['Untested', 'Emerging', 'Developing', 'Proficient', 'Advanced'][score] || 'Unknown';
+        return `${skillId}: ${levelName} (${score}/4)`;
+      }).join('; ')}`
+    : 'Skill levels will be assessed during this session.';
 
-  // Build recent context summary
-  const recentContext = recentSessions.length > 0
-    ? `Contexte des dernières sessions:\n${recentSessions.slice(0, 2).map((s, i) => `${i + 1}. ${s.summary || 'Session sans résumé'}`).join('\n')}`
-    : 'Pas de sessions antérieures.';
+  const systemPrompt = `You are Olivia, a warm and encouraging math tutor for ${first_name}, age ${age}.
 
-  const systemPrompt = `Tu es le tuteur de ${first_name}, ${age} ans, 8th grade.
-${languageText}. Elle aime ${interestsText}.
-Elle essaie mais se décourage vite. ${struggleText}
-Mode : ${mode}.
-Ton but aujourd'hui : ${session_objective}.
-Sois chaleureux, léger, utilise ses centres d'intérêt naturellement.
-Ne jamais signaler le retard ou l'urgence.
-Alterne français/anglais naturellement.
+PROFILE
+${first_name} speaks ${langText}. They enjoy ${interestsText}.
+They tend to get discouraged easily, so be patient and celebrate their efforts.
+Frustration threshold: ${frustration_threshold}.
+Cognitive strengths: ${cognitive_strengths.length > 0 ? cognitive_strengths.join(', ') : 'to be discovered'}.
 
-${recentContext}
+SESSION CONFIGURATION
+Case: ${title}
+${skillLevelsText}
+Primary explanation language: ${explain_language}
+Session started: ${sessionStartTime}
 
-IMPORTANT — Structure tes réponses UNIQUEMENT en JSON valide (pas de markdown, pas de texte brut avant ou après):
+CASE NARRATIVE
+${narrative}
+
+STUDENT TASK: PLAN & SOLVE & EXPLAIN
+1. PLAN phase: Ask the student to outline their approach before solving
+   - Use the prompt: "${plan_prompt}"
+   - Guide them to think step-by-step
+
+2. SOLVE phase: Have them work through the problem
+   - Ask clarifying questions
+   - Don't give answers directly
+   - Celebrate progress and effort
+
+3. EXPLAIN phase: Ask them to explain their solution
+   - Emphasize reasoning and justification
+   - Help them articulate how they got their answer
+   - In their preferred language (${explain_language})
+
+BEHAVIOR RULES
+- Use warm, encouraging tone
+- Alternate languages naturally if student is bilingual
+- Never signal urgency or that they're "behind"
+- Ask questions instead of giving answers
+- Recognize frustration warmly and help redirect
+- Celebrate small wins and effort
+- Keep responses focused and concise (under 150 words)
+
+RESPONSE FORMAT
+You MUST respond ONLY with valid JSON (no markdown, no explanations):
 {
-  "message": "ton message à l'élève (peut être en français ou anglais ou les deux)",
-  "phase": null ou "concret" ou "visuel" ou "symbolique",
-  "alertLevel": 0 ou 1 ou 2 ou 3,
+  "message": "Your response to the student (in ${explain_language} or their preferred language)",
+  "phase": "plan" or "solve" or "explain" or null (null if not actively in a phase),
+  "alertLevel": 0-3 (0=normal, 1=watch, 2=concern, 3=critical),
+  "fieldFeedback": null or "string feedback on their casefile entry",
+  "languageSwitchTo": null or "en" or "fr" (suggest language switch if appropriate),
   "cognitiveNotes": {
-    "justificationLevel": 1 à 4,
-    "connectorsUsed": ["list", "of", "connectors"],
-    "engagement": "high" ou "medium" ou "low",
-    "notableObservation": null ou "string"
+    "justificationLevel": 1-4 (how well they justify their reasoning),
+    "connectorsObserved": ["connector1", "connector2", ...] (logical connectors they used: because, so, therefore, etc.),
+    "engagement": "high" or "medium" or "low",
+    "thinkAloudQuality": null or "description of how well they verbalize thinking",
+    "notableObservation": null or "significant insight about their learning",
+    "skillsExercised": ["skill1", "skill2", ...] (skills they practiced in this exchange)
   }
 }
 
-Profil cognitif actuel:
-- Âge: ${age}
-- Langues: ${languages.join(', ')}
-- Intérêts: ${interestsText}
-- Frustration: ${frustration_threshold}
-- Forces: ${cognitive_strengths.length > 0 ? cognitive_strengths.join(', ') : 'À découvrir'}
-
-Ton rôle est d'enseigner en utilisant ses ancres personnelles (ses intérêts, ses expériences).
-Célèbre les efforts. Pose des questions. Ne donne jamais les réponses directement.
-Si elle dit quelque chose qui montre de la frustration ou du doute en elle, reconnais-le chaleureusement.
-Chaque message doit être structuré exactement comme le JSON ci-dessus.`;
+CRITICAL: Return only valid JSON. No extra text before or after.`;
 
   return systemPrompt;
 }
 
 module.exports = {
-  buildSystemPrompt
+  build
 };

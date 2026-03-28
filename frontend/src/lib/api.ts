@@ -38,40 +38,70 @@ const makeRequest = async <T>(
   return response.json();
 };
 
+// ===== NEW TYPES FOR V3 =====
+
+export interface CaseTemplate {
+  id: string;
+  title: string;
+  narrative: string;
+  plan_prompt: string;
+  explain_language: 'en' | 'fr';
+  target_skills: string[];
+}
+
+export interface SessionStartResponse {
+  session_id: string;
+  case: CaseTemplate;
+  greeting: string;
+}
+
+export interface SessionResponse {
+  message: string;
+  phase: 'plan' | 'solve' | 'explain' | null;
+  alertLevel: number;
+  fieldFeedback?: string;
+  languageSwitchTo?: 'en' | 'fr';
+  session_ended?: boolean;
+  session_time_remaining?: number;
+}
+
+export interface CaseFileResponse {
+  feedback?: string;
+  phaseComplete: boolean;
+}
+
+export interface EditEvent {
+  field: 'given' | 'problem' | 'solution' | 'explanation';
+  event: 'keystroke' | 'pause' | 'delete' | 'focus' | 'blur';
+  timestamp: number;
+  charCount?: number;
+  pauseDuration?: number;
+}
+
+export interface SessionReport {
+  session_id: string;
+  skills_practiced: string[];
+  engagement: number;
+  notable_moment: string;
+  plan_quality: number;
+  solution_correct: boolean;
+  explanation_quality: number;
+  explanation_language: 'en' | 'fr';
+  new_connectors: string[];
+  think_aloud: number;
+  next_session_target: string;
+  parent_action: string;
+  duration: number;
+  started_at: string;
+  ended_at: string;
+}
+
+// Legacy types for backward compatibility
 export interface SessionMessage {
   id: string;
   content: string;
   sender: 'student' | 'tutor';
   timestamp: string;
-}
-
-export interface SessionResponse {
-  message: string;
-  phase: 'concret' | 'visuel' | 'symbolique' | null;
-  alertLevel?: number;
-}
-
-export interface SessionStartResponse {
-  session_id: string;
-  started_at: string;
-  mode?: string;
-  greeting: string;
-}
-
-export interface SessionReport {
-  session_id: string;
-  engagement: number;
-  notable_moment: string;
-  observations: {
-    strengths: string[];
-    blockers: string[];
-    cognitive_signals: string[];
-  };
-  next_session: string;
-  parent_action: string;
-  duration: number;
-  started_at: string;
-  ended_at: string;
 }
 
 export const api = {
@@ -89,33 +119,53 @@ export const api = {
     return data;
   },
 
-  // Sessions
-  startSession: async (mode: 'devoir' | 'session' | 'explorer') => {
+  // Sessions - V3 new endpoints
+  startSession: async (mode?: string) => {
     const data = await makeRequest<SessionStartResponse>('/session/start', {
       method: 'POST',
-      body: JSON.stringify({ mode }),
+      body: JSON.stringify(mode ? { mode } : {}),
     });
     return data;
   },
 
-  sendMessage: async (sessionId: string, message: string): Promise<SessionResponse> => {
+  sendMessage: async (
+    sessionId: string,
+    message: string,
+    source?: 'text' | 'voice',
+    field?: 'given' | 'problem' | 'solution' | 'explanation'
+  ): Promise<SessionResponse> => {
     const data = await makeRequest<SessionResponse>(
       `/session/${sessionId}/message`,
       {
         method: 'POST',
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, source, field }),
       }
     );
     return data;
   },
 
-  endSession: async (sessionId: string) => {
+  submitCaseFile: async (
+    sessionId: string,
+    field: 'given' | 'problem' | 'solution' | 'explanation',
+    content: string
+  ): Promise<CaseFileResponse> => {
+    const data = await makeRequest<CaseFileResponse>(
+      `/session/${sessionId}/casefile`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ field, content }),
+      }
+    );
+    return data;
+  },
+
+  endSession: async (sessionId: string, editLog: EditEvent[]) => {
     const data = await makeRequest<{
       session_id: string;
       report: SessionReport;
     }>(`/session/${sessionId}/end`, {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify({ editLog }),
     });
     return data;
   },

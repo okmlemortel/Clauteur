@@ -85,6 +85,92 @@ async function getKnowledgeMap(studentId) {
 }
 
 /**
+ * Get skill map for a student
+ */
+async function getSkillMap(studentId) {
+  const { data, error } = await supabase
+    .from('student_skills')
+    .select('*')
+    .eq('student_id', studentId);
+
+  if (error) {
+    console.error('Error fetching skill map:', error);
+    return {};
+  }
+
+  const skillMap = {};
+  if (data) {
+    data.forEach(sk => {
+      skillMap[sk.skill_id] = sk.score || 0;
+    });
+  }
+
+  return skillMap;
+}
+
+/**
+ * Update skill score for a student
+ */
+async function updateSkillScore(studentId, skillId, score) {
+  const { data, error } = await supabase
+    .from('student_skills')
+    .upsert({
+      student_id: studentId,
+      skill_id: skillId,
+      score: Math.max(0, Math.min(4, score))
+    }, { onConflict: 'student_id,skill_id' })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating skill score:', error);
+    throw { status: 500, message: 'Failed to update skill' };
+  }
+
+  return data;
+}
+
+/**
+ * Get case templates (all or filtered)
+ */
+async function getCaseTemplates(filters = {}) {
+  let query = supabase
+    .from('case_templates')
+    .select('*');
+
+  if (filters.status) {
+    query = query.eq('status', filters.status);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Error fetching case templates:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Get a single case template by ID
+ */
+async function getCaseTemplate(caseId) {
+  const { data, error } = await supabase
+    .from('case_templates')
+    .select('*')
+    .eq('id', caseId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching case template:', error);
+    throw { status: 404, message: 'Case template not found' };
+  }
+
+  return data;
+}
+
+/**
  * Create a new session
  */
 async function createSession(sessionData) {
@@ -96,8 +182,14 @@ async function createSession(sessionData) {
       id,
       student_id: sessionData.student_id,
       started_at: new Date().toISOString(),
+      case_template_id: sessionData.case_template_id || null,
       mode: sessionData.mode || 'PROGRAMME',
-      max_alert_level: 0
+      max_alert_level: 0,
+      casefile: sessionData.casefile || {},
+      edit_log: sessionData.edit_log || [],
+      voice_transcripts: sessionData.voice_transcripts || [],
+      cognitive_summary: sessionData.cognitive_summary || {},
+      language_analysis: sessionData.language_analysis || {}
     })
     .select()
     .single();
@@ -121,6 +213,23 @@ async function updateSession(sessionId, data) {
     const start = new Date(data.started_at);
     const end = new Date(data.ended_at);
     updateData.duration_minutes = Math.round((end - start) / 60000);
+  }
+
+  // Preserve arrays/objects if provided
+  if (data.casefile) {
+    updateData.casefile = data.casefile;
+  }
+  if (data.edit_log) {
+    updateData.edit_log = data.edit_log;
+  }
+  if (data.voice_transcripts) {
+    updateData.voice_transcripts = data.voice_transcripts;
+  }
+  if (data.cognitive_summary) {
+    updateData.cognitive_summary = data.cognitive_summary;
+  }
+  if (data.language_analysis) {
+    updateData.language_analysis = data.language_analysis;
   }
 
   const { data: result, error } = await supabase
@@ -254,5 +363,9 @@ module.exports = {
   getStudentByCode,
   getParentByCode,
   getStudentFromParent,
-  getSessionById
+  getSessionById,
+  getSkillMap,
+  updateSkillScore,
+  getCaseTemplates,
+  getCaseTemplate
 };

@@ -1,14 +1,115 @@
 /**
- * Report Generator
- * Creates parent reports from session data and cognitive notes
+ * Report Generator for v3 Design Spec
+ * Creates parent reports from session data
  */
 
 /**
- * Aggregate cognitive notes from all messages in a session
- * @param {Array} messages - Messages array with cognitiveNotes attached
- * @returns {Object} Aggregated cognitive data
+ * Generate a parent report from session data
+ * @param {Object} sessionData - Session data from database
+ * @param {Array} messages - All messages from the session (with cognitiveNotes)
+ * @param {Object} caseTemplate - The case template used
+ * @param {Object} languageAnalysis - Language analysis data (if any)
+ * @param {number} durationMinutes - Session duration in minutes
+ * @returns {Object} Parent report in specified format
  */
-function aggregateCognitiveNotes(messages) {
+function generateReport(sessionData, messages = [], caseTemplate = {}, languageAnalysis = {}, durationMinutes = 0) {
+  const cognitive = aggregateCognitiveData(messages);
+  const langData = aggregateLanguageData(languageAnalysis);
+
+  const caseTitle = caseTemplate.title || 'Detective Case';
+
+  // Determine engagement level
+  const engagementMap = {
+    high: 'high',
+    medium: 'medium',
+    low: 'low'
+  };
+  const engagement = engagementMap[cognitive.engagementTrend] || 'medium';
+
+  // Build notable moment
+  let notableMoment = 'Student engaged with learning material.';
+  if (cognitive.observations && cognitive.observations.length > 0) {
+    notableMoment = cognitive.observations[0];
+  }
+
+  // Determine plan, solution, and explanation quality
+  const planPhaseMessages = messages.filter(m => m.phase === 'plan');
+  const solvePhaseMessages = messages.filter(m => m.phase === 'solve');
+  const explainPhaseMessages = messages.filter(m => m.phase === 'explain');
+
+  const planQuality = planPhaseMessages.length > 0
+    ? Math.min(4, Math.ceil(cognitive.avgJustificationLevel * 1.1))
+    : null;
+  const solutionCorrect = solvePhaseMessages.length > 0 ? 'attempted' : null;
+  const explanationQuality = explainPhaseMessages.length > 0
+    ? Math.min(4, cognitive.avgJustificationLevel)
+    : null;
+
+  // Extract explanation language used
+  const explanationLanguage = langData.language_detected || caseTemplate.explain_language || 'french';
+
+  // New connectors learned
+  const newConnectors = langData.new_connectors || [];
+
+  // Think-aloud quality
+  const thinkAloudQualities = messages
+    .filter(m => m.cognitiveNotes && m.cognitiveNotes.thinkAloudQuality)
+    .map(m => m.cognitiveNotes.thinkAloudQuality);
+  const thinkAloudSummary = thinkAloudQualities.length > 0
+    ? thinkAloudQualities[0]
+    : null;
+
+  // Next session target (based on skill gaps)
+  const skillsExercised = new Set();
+  messages.forEach(m => {
+    if (m.cognitiveNotes && m.cognitiveNotes.skillsExercised) {
+      m.cognitiveNotes.skillsExercised.forEach(s => skillsExercised.add(s));
+    }
+  });
+
+  let nextSessionTarget = 'Continue building on current skills';
+  if (cognitive.avgJustificationLevel < 2) {
+    nextSessionTarget = 'Build foundational understanding with more concrete examples';
+  } else if (cognitive.avgJustificationLevel >= 3) {
+    nextSessionTarget = 'Move toward more abstract problem-solving';
+  }
+
+  // Parent action suggestion
+  let parentAction = 'Reinforce today\'s learning by asking your child to explain the concept to you.';
+  if (engagement === 'low') {
+    parentAction = 'Check in on whether the topic was interesting or if something else is on their mind.';
+  } else if (engagement === 'high') {
+    parentAction = 'Take advantage of high engagement! Encourage exploration of related topics in free time.';
+  }
+
+  return {
+    date: new Date().toISOString().split('T')[0],
+    case: caseTitle,
+    duration_minutes: durationMinutes,
+    skills_practiced: Array.from(skillsExercised),
+    engagement: engagement,
+    notable_moment: notableMoment,
+    plan_quality: planQuality,
+    solution_correct: solutionCorrect,
+    explanation_language: explanationLanguage,
+    explanation_quality: explanationQuality,
+    new_connectors: newConnectors,
+    think_aloud: thinkAloudSummary,
+    next_session_target: nextSessionTarget,
+    parent_action: parentAction,
+    cognitive_metrics: {
+      avg_justification_level: cognitive.avgJustificationLevel,
+      connectors_used_count: cognitive.allConnectors.length,
+      unique_connectors: cognitive.allConnectors,
+      learning_phases_observed: [...new Set(cognitive.phases)]
+    }
+  };
+}
+
+/**
+ * Aggregate cognitive notes from all messages
+ */
+function aggregateCognitiveData(messages) {
   if (!messages || messages.length === 0) {
     return {
       avgJustificationLevel: 2,
@@ -31,18 +132,22 @@ function aggregateCognitiveNotes(messages) {
     };
   }
 
+  // Average justification level
   const justificationLevels = assistantMessages.map(m => m.cognitiveNotes.justificationLevel || 2);
-  const avgJustificationLevel = Math.round(justificationLevels.reduce((a, b) => a + b, 0) / justificationLevels.length);
+  const avgJustificationLevel = Math.round(
+    justificationLevels.reduce((a, b) => a + b, 0) / justificationLevels.length
+  );
 
+  // Unique connectors
   const allConnectors = [];
   assistantMessages.forEach(m => {
-    if (m.cognitiveNotes.connectorsUsed && Array.isArray(m.cognitiveNotes.connectorsUsed)) {
-      allConnectors.push(...m.cognitiveNotes.connectorsUsed);
+    if (m.cognitiveNotes.connectorsObserved && Array.isArray(m.cognitiveNotes.connectorsObserved)) {
+      allConnectors.push(...m.cognitiveNotes.connectorsObserved);
     }
   });
   const uniqueConnectors = [...new Set(allConnectors)];
 
-  // Determine engagement trend (most common)
+  // Engagement trend
   const engagements = assistantMessages.map(m => m.cognitiveNotes.engagement || 'medium');
   const engagementCounts = {};
   engagements.forEach(e => {
@@ -52,12 +157,12 @@ function aggregateCognitiveNotes(messages) {
     engagementCounts[a] > engagementCounts[b] ? a : b
   );
 
-  // Collect observations
+  // Observations
   const observations = assistantMessages
     .filter(m => m.cognitiveNotes.notableObservation)
     .map(m => m.cognitiveNotes.notableObservation);
 
-  // Collect phases
+  // Phases
   const phases = assistantMessages
     .filter(m => m.phase)
     .map(m => m.phase);
@@ -72,124 +177,24 @@ function aggregateCognitiveNotes(messages) {
 }
 
 /**
- * Generate a parent report
- * @param {Object} sessionData - Session data from database
- * @param {Array} messages - All messages from the session (with cognitiveNotes)
- * @param {number} durationMinutes - Session duration
- * @returns {Object} Parent report in specified format
+ * Aggregate language analysis data
  */
-function generateParentReport(sessionData, messages = [], durationMinutes = 0) {
-  const cognitive = aggregateCognitiveNotes(messages);
-
-  // Extract subject from messages (rough heuristic)
-  let subject = 'General Learning Session';
-  if (messages && messages.length > 0) {
-    const firstUserMessage = messages.find(m => m.role === 'user')?.content;
-    if (firstUserMessage && firstUserMessage.length < 100) {
-      subject = firstUserMessage.substring(0, 50);
-    }
-  }
-
-  // Determine engagement level
-  const engagementMap = {
-    high: 'high',
-    medium: 'medium',
-    low: 'low'
-  };
-  const engagement = engagementMap[cognitive.engagementTrend] || 'medium';
-
-  // Build notable moment
-  let notableMoment = 'Student engaged with learning material.';
-  if (cognitive.observations && cognitive.observations.length > 0) {
-    notableMoment = cognitive.observations[0];
-  }
-
-  // Build strengths
-  const strengths = [];
-  if (engagement === 'high') {
-    strengths.push('Shows strong engagement and focus');
-  }
-  if (cognitive.avgJustificationLevel >= 3) {
-    strengths.push('Demonstrates logical reasoning and justification');
-  }
-  if (cognitive.allConnectors.length > 0) {
-    strengths.push(`Uses multiple learning connectors: ${cognitive.allConnectors.slice(0, 3).join(', ')}`);
-  }
-  if (strengths.length === 0) {
-    strengths.push('Made effort to learn');
-  }
-
-  // Build blockers (inferred)
-  const blockers = [];
-  if (engagement === 'low') {
-    blockers.push('Engagement is lower than usual - may need a break or topic shift');
-  }
-  if (cognitive.avgJustificationLevel <= 2) {
-    blockers.push('May benefit from more structured logical scaffolding');
-  }
-  if (blockers.length === 0) {
-    blockers.push('No major blockers observed');
-  }
-
-  // Cognitive signals
-  const cognitiveSignals = [];
-  if (cognitive.phases.length > 0) {
-    cognitiveSignals.push(`Learning phases observed: ${[...new Set(cognitive.phases)].join(', ')}`);
-  }
-  if (cognitive.avgJustificationLevel >= 1 && cognitive.avgJustificationLevel <= 4) {
-    const phaseNames = ['', 'Very basic', 'Developing', 'Proficient', 'Advanced'];
-    cognitiveSignals.push(`Justification level: ${phaseNames[cognitive.avgJustificationLevel]}`);
-  }
-  if (cognitive.allConnectors.length > 0) {
-    cognitiveSignals.push(`Evidence of connector usage: ${cognitive.allConnectors.length} unique strategies used`);
-  }
-
-  // Next session recommendation
-  let nextConcept = 'Continue reinforcing current concepts';
-  let nextAnchor = 'Use student\'s interests as anchor';
-
-  if (cognitive.avgJustificationLevel < 2) {
-    nextConcept = 'Build foundational understanding with more concrete examples';
-    nextAnchor = 'Use everyday examples and real objects';
-  } else if (cognitive.avgJustificationLevel >= 3) {
-    nextConcept = 'Introduce more abstract or complex concepts';
-    nextAnchor = 'Use visual diagrams and symbolic representations';
-  }
-
-  // Parent action suggestion
-  let parentAction = 'Reinforce what was learned today by asking your child to explain a concept to you.';
-  if (engagement === 'low') {
-    parentAction = 'Check in on whether the topic was interesting or if something else is on their mind.';
-  } else if (engagement === 'high') {
-    parentAction = 'Take advantage of high engagement! Ask them to explore related topics in their free time.';
+function aggregateLanguageData(languageAnalysis) {
+  if (!languageAnalysis || typeof languageAnalysis !== 'object') {
+    return {
+      language_detected: 'french',
+      new_connectors: []
+    };
   }
 
   return {
-    date: new Date().toISOString().split('T')[0],
-    duration_minutes: durationMinutes,
-    subject: subject,
-    engagement: engagement,
-    notable_moment: notableMoment,
-    observations: {
-      strengths: strengths,
-      blockers: blockers,
-      cognitive_signals: cognitiveSignals
-    },
-    next_session: {
-      concept: nextConcept,
-      anchor: nextAnchor
-    },
-    parent_action: parentAction,
-    cognitive_metrics: {
-      avg_justification_level: cognitive.avgJustificationLevel,
-      connectors_used_count: cognitive.allConnectors.length,
-      unique_connectors: cognitive.allConnectors,
-      learning_phases_observed: [...new Set(cognitive.phases)]
-    }
+    language_detected: languageAnalysis.language_detected || 'french',
+    new_connectors: languageAnalysis.new_connectors || []
   };
 }
 
 module.exports = {
-  generateParentReport,
-  aggregateCognitiveNotes
+  generateReport,
+  aggregateCognitiveData,
+  aggregateLanguageData
 };

@@ -1,22 +1,25 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 const memory = require('../services/memory');
-const claude = require('../services/claude');
-const { buildSystemPrompt } = require('../services/systemPrompt');
-const { generateParentReport } = require('../services/reportGenerator');
+const tutor = require('../services/tutor');
+const caseSelector = require('../services/caseSelector');
+const languageAgent = require('../services/languageAgent');
+const { build: buildSystemPrompt } = require('../services/systemPrompt');
+const { generateReport } = require('../services/reportGenerator');
 const alerts = require('../services/alerts');
 
 // In-memory session store
-// Structure: { systemPrompt, studentId, studentProfile, startedAt, mode, messages: [{role, content, phase, alertLevel, cognitiveNotes}] }
+// Structure: { systemPrompt, studentId, studentProfile, caseTemplate, startedAt, messages: [...], casefile: {}, ... }
 const activeSessions = new Map();
 
-const MAX_SESSION_DURATION_MINUTES = 40;
+const MAX_SESSION_DURATION_MINUTES = 20;
 
 /**
  * POST /start
  * Create a new tutoring session
- * Returns: initial greeting from Claude
+ * Calls caseSelector to pick next case, builds system prompt, generates greeting
+ * Returns: { session_id, case, greeting }
  */
 router.post('/start', authenticateToken, async (req, res) => {
   try {
@@ -38,39 +41,67 @@ router.post('/start', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Student profile not found' });
     }
 
+    // Get skill map for the student
+    const skillMap = await memory.getSkillMap(studentId);
+    studentProfile.skill_map = skillMap;
+
+    // Select next case using caseSelector
+    const caseTemplate = await caseSelector.selectNextCase(studentId);
+    if (!caseTemplate) {
+      return res.status(400).json({ error: 'No suitable case available for this student' });
+    }
+
     // Create session in database
-    const session = await memory.createSession({
+    const sessionData = await memory.createSession({
       student_id: studentId,
-      mode
+      case_template_id: caseTemplate.id,
+      mode,
+      casefile: {
+        given: null,
+        problem: null,
+        solution: null,
+        explanation: null
+      },
+      edit_log: [],
+      voice_transcripts: [],
+      cognitive_summary: {},
+      language_analysis: {}
     });
 
     // Build system prompt
-    const systemPrompt = buildSystemPrompt(studentProfile, mode, []);
+    const systemPrompt = buildSystemPrompt(studentProfile, caseTemplate, {
+      sessionStartTime: sessionData.started_at
+    });
 
     // Generate initial greeting
     let initialGreeting;
     try {
-      initialGreeting = await claude.generateGreeting(studentProfile);
+      initialGreeting = await tutor.generateGreeting(studentProfile);
     } catch (error) {
       console.error('Error generating greeting:', error);
       initialGreeting = {
-        message: `Hello! I'm your tutor. What would you like to learn about today?`,
+        message: 'Hello! I\'m here to help. What would you like to work on today?',
         phase: null,
         alertLevel: 0,
+        fieldFeedback: null,
+        languageSwitchTo: null,
         cognitiveNotes: {
           justificationLevel: 1,
-          connectorsUsed: [],
+          connectorsObserved: [],
           engagement: 'medium',
-          notableObservation: null
+          thinkAloudQuality: null,
+          notableObservation: null,
+          skillsExercised: []
         }
       };
     }
 
     // Initialize in-memory session
-    activeSessions.set(session.id, {
+    activeSessions.set(sessionData.id, {
       systemPrompt,
       studentId,
       studentProfile,
+      caseTemplate,
       startedAt: Date.now(),
       mode,
       messages: [
@@ -81,15 +112,26 @@ router.post('/start', authenticateToken, async (req, res) => {
           alertLevel: initialGreeting.alertLevel,
           cognitiveNotes: initialGreeting.cognitiveNotes
         }
-      ]
+      ],
+      casefile: {
+        given: null,
+        problem: null,
+        solution: null,
+        explanation: null
+      },
+      languageAnalysisData: {}
     });
 
     res.status(201).json({
-      session_id: session.id,
-      started_at: session.started_at,
-      mode: session.mode,
-      greeting: initialGreeting.message,
-      greeting_phase: initialGreeting.phase
+      session_id: sessionData.id,
+      case: {
+        id: caseTemplate.id,
+        title: caseTemplate.title,
+        narrative: caseTemplate.narrative,
+        plan_prompt: caseTemplate.plan_prompt,
+        explain_language: caseTemplate.explain_language
+      },
+      greeting: initialGreeting.message
     });
   } catch (error) {
     console.error('Session start error:', error);
@@ -100,11 +142,12 @@ router.post('/start', authenticateToken, async (req, res) => {
 /**
  * POST /:sessionId/message
  * Send a message in the session, get AI response
+ * Body: { message, source: 'chat'|'voice'|'casefile', field?: string }
  */
 router.post('/:sessionId/message', authenticateToken, async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { message } = req.body;
+    const { message, source = 'chat', field } = req.body;
 
     if (!message) {
       return res.status(400).json({ error: 'message is required' });
@@ -123,6 +166,8 @@ router.post('/:sessionId/message', authenticateToken, async (req, res) => {
     sessionData.messages.push({
       role: 'user',
       content: message,
+      source,
+      field: field || null,
       phase: null,
       alertLevel: 0,
       cognitiveNotes: null
@@ -147,37 +192,58 @@ router.post('/:sessionId/message', authenticateToken, async (req, res) => {
       activeSessions.delete(sessionId);
 
       return res.status(200).json({
-        response: 'I notice you might be going through something difficult. Please reach out to your parent or guardian. They care about you and want to help. I\'m here to support your learning, but right now it\'s important to talk to an adult you trust.',
+        message: 'I notice you might be going through something difficult. Please reach out to your parent or guardian. They care about you and want to help.',
         phase: null,
         alertLevel: 3,
-        trigger,
-        session_ended: true
+        fieldFeedback: null,
+        languageSwitchTo: null,
+        session_ended: true,
+        session_time_remaining: 0
       });
     }
 
-    // Get Claude response
+    // Call tutor with full context
     let claudeResponse;
     try {
-      claudeResponse = await claude.chat(sessionData.systemPrompt, sessionData.messages, sessionData.studentProfile);
+      claudeResponse = await tutor.chat({
+        systemPrompt: sessionData.systemPrompt,
+        messages: sessionData.messages,
+        caseFile: sessionData.casefile,
+        currentPhase: null,
+        studentProfile: sessionData.studentProfile
+      });
     } catch (error) {
-      console.error('Claude call error:', error);
+      console.error('Tutor call error:', error);
       return res.status(500).json({ error: 'Failed to get response from tutor' });
     }
 
-    // Add assistant message to session with full metadata
+    // Add assistant message to session
     const assistantMessage = {
       role: 'assistant',
       content: claudeResponse.message,
       phase: claudeResponse.phase,
       alertLevel: claudeResponse.alertLevel || 0,
+      fieldFeedback: claudeResponse.fieldFeedback || null,
+      languageSwitchTo: claudeResponse.languageSwitchTo || null,
       cognitiveNotes: claudeResponse.cognitiveNotes || {
         justificationLevel: 2,
-        connectorsUsed: [],
+        connectorsObserved: [],
         engagement: 'medium',
-        notableObservation: null
+        thinkAloudQuality: null,
+        notableObservation: null,
+        skillsExercised: []
       }
     };
     sessionData.messages.push(assistantMessage);
+
+    // Fire async language analysis (don't await in response path)
+    languageAgent.analyze(message, sessionData.studentProfile.languages?.[0] || 'en').then(analysis => {
+      if (analysis) {
+        sessionData.languageAnalysisData = analysis;
+      }
+    }).catch(err => {
+      console.error('Language analysis failed:', err);
+    });
 
     // If level 2 alert, create it but continue session
     if (alertLevel === 2) {
@@ -190,7 +256,7 @@ router.post('/:sessionId/message', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check session duration - auto-end if exceeded
+    // Check session duration
     const elapsedMinutes = (Date.now() - sessionData.startedAt) / 60000;
     const sessionEnded = elapsedMinutes > MAX_SESSION_DURATION_MINUTES;
 
@@ -198,18 +264,77 @@ router.post('/:sessionId/message', authenticateToken, async (req, res) => {
       message: claudeResponse.message,
       phase: claudeResponse.phase,
       alertLevel: alertLevel || 0,
-      trigger: alertLevel > 0 ? trigger : null,
+      fieldFeedback: claudeResponse.fieldFeedback || null,
+      languageSwitchTo: claudeResponse.languageSwitchTo || null,
       session_ended: sessionEnded,
       session_time_remaining: Math.max(0, MAX_SESSION_DURATION_MINUTES - elapsedMinutes)
     });
 
-    // If session exceeded max duration, auto-end it
+    // Auto-end if exceeded max duration
     if (sessionEnded) {
       await endSessionInternal(sessionId, sessionData);
     }
   } catch (error) {
     console.error('Message error:', error);
     res.status(error.status || 500).json({ error: error.message || 'Failed to process message' });
+  }
+});
+
+/**
+ * POST /:sessionId/casefile
+ * Save field content and get evaluation
+ * Body: { field: 'given'|'problem'|'solution'|'explanation', content: string }
+ */
+router.post('/:sessionId/casefile', authenticateToken, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { field, content } = req.body;
+
+    if (!field || !['given', 'problem', 'solution', 'explanation'].includes(field)) {
+      return res.status(400).json({ error: 'Invalid field' });
+    }
+
+    // Get active session
+    const sessionData = activeSessions.get(sessionId);
+    if (!sessionData) {
+      return res.status(404).json({ error: 'Session not found or expired' });
+    }
+
+    // Save to casefile
+    sessionData.casefile[field] = content;
+
+    // Send to tutor for evaluation
+    let feedback;
+    try {
+      const response = await tutor.chat({
+        systemPrompt: sessionData.systemPrompt,
+        messages: [
+          {
+            role: 'user',
+            content: `Student submitted their ${field}: "${content}". Provide brief feedback.`
+          }
+        ],
+        caseFile: sessionData.casefile,
+        currentPhase: null,
+        studentProfile: sessionData.studentProfile
+      });
+
+      feedback = response.fieldFeedback || response.message;
+    } catch (error) {
+      console.error('Casefile feedback error:', error);
+      feedback = 'Thank you for submitting your work.';
+    }
+
+    // Determine if phase is complete (simplified)
+    const phaseComplete = content && content.length > 20;
+
+    res.json({
+      feedback,
+      phaseComplete
+    });
+  } catch (error) {
+    console.error('Casefile error:', error);
+    res.status(error.status || 500).json({ error: error.message || 'Failed to save casefile' });
   }
 });
 
@@ -221,17 +346,21 @@ async function endSessionInternal(sessionId, sessionData) {
     const durationMinutes = Math.round((Date.now() - sessionData.startedAt) / 60000);
 
     // Generate parent report
-    const parentReport = generateParentReport(
+    const report = generateReport(
       { mode: sessionData.mode },
       sessionData.messages,
+      sessionData.caseTemplate,
+      sessionData.languageAnalysisData,
       durationMinutes
     );
 
     // Update session in database
     await memory.updateSession(sessionId, {
       ended_at: new Date().toISOString(),
-      summary: `Session focused on ${sessionData.mode}. ${parentReport.observations.strengths[0] || 'Session completed.'}`,
-      report: parentReport,
+      casefile: sessionData.casefile,
+      language_analysis: sessionData.languageAnalysisData,
+      cognitive_summary: report,
+      report,
       max_alert_level: sessionData.maxAlertLevel || 0
     });
 
@@ -244,11 +373,13 @@ async function endSessionInternal(sessionId, sessionData) {
 
 /**
  * POST /:sessionId/end
- * End session, generate parent report, save to database
+ * End session, generate parent report
+ * Body: { editLog: EditEvent[] }
  */
 router.post('/:sessionId/end', authenticateToken, async (req, res) => {
   try {
     const { sessionId } = req.params;
+    const { editLog } = req.body;
 
     // Get active session
     const sessionData = activeSessions.get(sessionId);
@@ -259,17 +390,23 @@ router.post('/:sessionId/end', authenticateToken, async (req, res) => {
     const durationMinutes = Math.round((Date.now() - sessionData.startedAt) / 60000);
 
     // Generate parent report
-    const parentReport = generateParentReport(
+    const report = generateReport(
       { mode: sessionData.mode },
       sessionData.messages,
+      sessionData.caseTemplate,
+      sessionData.languageAnalysisData,
       durationMinutes
     );
 
     // Update session in database
     const updatedSession = await memory.updateSession(sessionId, {
       ended_at: new Date().toISOString(),
-      summary: `Session focused on ${sessionData.mode}. ${parentReport.observations.strengths[0] || 'Session completed.'}`,
-      report: parentReport,
+      casefile: sessionData.casefile,
+      edit_log: editLog || [],
+      voice_transcripts: sessionData.voice_transcripts || [],
+      language_analysis: sessionData.languageAnalysisData,
+      cognitive_summary: report,
+      report,
       max_alert_level: sessionData.maxAlertLevel || 0
     });
 
@@ -280,7 +417,7 @@ router.post('/:sessionId/end', authenticateToken, async (req, res) => {
       session_id: sessionId,
       ended_at: updatedSession.ended_at,
       duration_minutes: updatedSession.duration_minutes,
-      report: parentReport
+      report
     });
   } catch (error) {
     console.error('Session end error:', error);
@@ -307,7 +444,8 @@ router.get('/:sessionId', authenticateToken, async (req, res) => {
         message_count: activeSession.messages.length,
         started_at: new Date(activeSession.startedAt).toISOString(),
         elapsed_minutes: Math.round(elapsedMinutes),
-        time_remaining: Math.max(0, MAX_SESSION_DURATION_MINUTES - elapsedMinutes)
+        time_remaining: Math.max(0, MAX_SESSION_DURATION_MINUTES - elapsedMinutes),
+        case: activeSession.caseTemplate
       });
     }
 
@@ -324,7 +462,8 @@ router.get('/:sessionId', authenticateToken, async (req, res) => {
       ended_at: dbSession.ended_at,
       duration_minutes: dbSession.duration_minutes,
       mode: dbSession.mode,
-      summary: dbSession.summary,
+      case: dbSession.case_template_id,
+      casefile: dbSession.casefile,
       report: dbSession.report
     });
   } catch (error) {

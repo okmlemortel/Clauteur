@@ -2,75 +2,92 @@
 
 import React from 'react';
 import { PhaseIndicator } from './PhaseIndicator';
+import { CaseFile } from './CaseFile';
+import { CaseTemplate } from '@/lib/api';
 
-type Phase = 'concret' | 'visuel' | 'symbolique' | null;
+type Phase = 'warmup' | 'plan' | 'solve' | 'explain';
 
 interface WorkspacePanelProps {
-  currentPhase: Phase;
   isVisible: boolean;
+  currentPhase: Phase;
+  caseData?: CaseTemplate;
+  onFieldChange: (field: 'given' | 'problem' | 'solution' | 'explanation', content: string) => void;
+  onFieldSubmit: (field: string, content: string) => void;
+  fieldFeedback?: string;
+  isVoiceActive?: boolean;
+  voiceTranscript?: string;
+  voiceTargetField?: string;
+  caseFileContent?: {
+    given: string;
+    problem: string;
+    solution: string;
+    explanation: string;
+  };
+  explainLanguage?: 'en' | 'fr';
 }
 
 export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
-  currentPhase,
   isVisible,
+  currentPhase,
+  caseData,
+  onFieldChange,
+  onFieldSubmit,
+  fieldFeedback,
+  isVoiceActive = false,
+  voiceTranscript = '',
+  voiceTargetField,
+  caseFileContent = {
+    given: '',
+    problem: '',
+    solution: '',
+    explanation: '',
+  },
+  explainLanguage = 'en',
 }) => {
-  const getPhaseContent = () => {
-    switch (currentPhase) {
-      case 'concret':
-        return {
-          title: 'Zone de manipulation',
-          description: 'Interagis avec les éléments pour comprendre le concept',
-          emoji: '✋',
-        };
-      case 'visuel':
-        return {
-          title: 'Zone de visualisation',
-          description: 'Vois comment ça fonctionne visuellement',
-          emoji: '👁️',
-        };
-      case 'symbolique':
-        return {
-          title: 'Zone d\'écriture',
-          description: 'Explique avec tes propres mots',
-          emoji: '✏️',
-        };
-      default:
-        return {
-          title: 'Espace de travail',
-          description: 'Attends le mode à explorer',
-          emoji: '⏳',
-        };
-    }
-  };
-
-  const content = getPhaseContent();
-
   return (
     <div
       className={`flex flex-col h-full bg-white rounded-2xl shadow-lg transition-all duration-300 ${
         !isVisible ? 'opacity-30 pointer-events-none' : ''
       }`}
     >
-      {/* Workspace Content */}
-      <div className="flex-1 flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="text-5xl mb-4">{content.emoji}</div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">
-            {content.title}
-          </h2>
-          <p className="text-slate-600 text-sm">{content.description}</p>
-
-          {/* Placeholder Content */}
-          <div className="mt-6 p-4 bg-gradient-to-br from-indigo-50 to-slate-50 rounded-xl border border-indigo-200">
-            <p className="text-xs text-slate-600">
-              Contenu interactif chargé ici en fonction de la phase
+      {/* Case File - main workspace */}
+      {caseData ? (
+        <CaseFile
+          caseTitle={caseData.title}
+          narrative={caseData.narrative}
+          planPrompt={caseData.plan_prompt}
+          currentPhase={currentPhase}
+          explainLanguage={explainLanguage}
+          onFieldChange={onFieldChange}
+          onFieldSubmit={onFieldSubmit}
+          fieldFeedback={fieldFeedback}
+          isVoiceActive={isVoiceActive}
+          voiceTranscript={voiceTranscript}
+          voiceTargetField={voiceTargetField}
+          caseFileContent={caseFileContent}
+        />
+      ) : (
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center">
+            <div className="text-5xl mb-4">⏳</div>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">
+              Waiting for case...
+            </h2>
+            <p className="text-slate-600 text-sm">
+              Claude will present your case shortly
             </p>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Phase Indicator at Bottom */}
-      <PhaseIndicator currentPhase={currentPhase} />
+      <PhaseIndicator
+        currentPhase={
+          currentPhase === 'warmup'
+            ? null
+            : (currentPhase as 'plan' | 'solve' | 'explain' | null)
+        }
+      />
     </div>
   );
 };

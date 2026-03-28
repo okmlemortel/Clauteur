@@ -59,13 +59,10 @@ router.post('/login', async (req, res) => {
     const token = generateToken(user.id, role);
 
     res.json({
+      user_id: user.id,
       token,
-      user: {
-        id: user.id,
-        role,
-        code: user.internal_code
-      },
-      studentProfile: studentProfile || null
+      role,
+      profile: studentProfile || null
     });
   } catch (error) {
     console.error('Login error:', error);

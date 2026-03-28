@@ -13,11 +13,11 @@ const { setupVoiceWebSocket } = require('./routes/voice');
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3001;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const CORS_ORIGIN = process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000';
 
 // Middleware
 app.use(cors({
-  origin: [FRONTEND_URL, 'http://localhost:3000'],
+  origin: [CORS_ORIGIN, 'http://localhost:3000'],
   credentials: true
 }));
 
@@ -31,9 +31,12 @@ app.use('/api/cases', casesRoutes);
 app.use('/api/analysis', analysisRoutes);
 app.use('/api/reports', reportsRoutes);
 
-// Health check
+// Health check (both paths for convenience)
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Setup WebSocket for voice
@@ -50,6 +53,6 @@ app.use((err, req, res, next) => {
 
 server.listen(PORT, () => {
   console.log(`Clauteur backend listening on port ${PORT}`);
-  console.log(`CORS configured for: ${FRONTEND_URL}`);
+  console.log(`CORS configured for: ${CORS_ORIGIN}`);
   console.log(`WebSocket voice transcription available at ws://localhost:${PORT}/api/voice`);
 });

@@ -12,7 +12,10 @@
       "Bash(mv COMMUNICATION.md .claude/)",
       "Bash(mv student-profile.json .claude/)",
       "Bash(mv figma-links.md .claude/)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git -C /Users/okm/Documents/Dev/Clauteur status)",
+      "Bash(git -C /Users/okm/Documents/Dev/Clauteur diff --stat)",
+      "Bash(git -C /Users/okm/Documents/Dev/Clauteur log --oneline -5)"
     ]
   }
 }

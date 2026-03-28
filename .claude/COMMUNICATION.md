@@ -7,28 +7,9 @@
 ## 🔴 EN ATTENTE D'ACTION
 
 ### [2026-03-28] — Olivier
-**Tâche** : Commit + push Sprint 2 sur GitHub
-**Type** : infra
-**Priorité** : Haute
-**Instructions** : Sprint 2 code complete. Commit et push.
-**Statut** : ⏳ En attente
-
-### [2026-03-28] — Olivier
-**Tâche** : Déployer Supabase + Railway + Vercel
-**Type** : infra
-**Priorité** : Haute — bloque les tests en production
-**Instructions** : Suivre `docs/DEPLOY-GUIDE.md` (guide complet étape par étape)
-**Migrations** :
-1. `supabase/migrations/001_initial_schema.sql` (tables + seed)
-2. `supabase/migrations/002_content_package_v1.sql` (10 case templates)
-3. `supabase/migrations/003_visual_component.sql` (visual_component column)
-**Variables d'environnement** : `ANTHROPIC_API_KEY`, `DEEPGRAM_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `JWT_SECRET`, `CORS_ORIGIN`
-**Statut** : ⏳ En attente
-
-### [2026-03-28] — Olivier
 **Tâche** : Activer Figma Dev Mode MCP Server
 **Type** : design
-**Priorité** : Moyenne — permet extraction tokens Figma directement
+**Priorité** : Basse — permet extraction tokens Figma directement
 **Instructions** : Figma desktop → Menu → Preferences → Enable Dev Mode MCP Server → restart Claude desktop
 **Statut** : ⏳ En attente
 
@@ -36,11 +17,37 @@
 
 ## 🟡 EN COURS
 
-*(rien en cours — Sprint 2 build terminé, en attente commit + deploy)*
+### [2026-03-29] — Cowork
+**Tâche** : Validation end-to-end du flow session
+**Type** : QA
+**Priorité** : Haute
+**Instructions** : Tester la checklist 22 étapes avec Claude API actif.
+**Statut** : 🟡 En cours
 
 ---
 
 ## ✅ COMPLÉTÉ
+
+### [2026-03-29] — Cowork + Olivier
+**Tâche** : Déploiement production — Supabase + Railway + Vercel
+**Type** : infra
+**Résultat** : App déployée et fonctionnelle end-to-end (login → session start → chat)
+**URLs** :
+- Frontend : https://clauteur-frontend.vercel.app
+- Backend : https://clauteur-production.up.railway.app
+**Bugs corrigés** :
+- `/api/health` 404 → ajout route `/api/health` (était seulement `/health`)
+- CORS env var mismatch → code vérifie `CORS_ORIGIN` puis `FRONTEND_URL`
+- Login "Code invalide" → response shape corrigée (`{user_id, token, role, profile}`)
+- Session 500 step 6 → `createSession` : supprimé colonne `mode`, mappé `casefile` vers colonnes individuelles
+- Session 500 step 7 → `systemPrompt.js` : `languages.includes()` crashait car `languages` est un objet JSONB, pas un array. Aussi corrigé `first_name` → `name`
+- Session 500 step 8 → `session.js` : variable `mode` non définie (ReferenceError), remplacée par `mode: 'detective'`
+- `getSkillMap` : table `student_skills` → `skill_map`
+- `updateSession` : `report` → `parent_report` column mapping
+- `generateGreeting` : extraction nom depuis profil JSONB imbriqué
+- `ANTHROPIC_API_KEY` env var : nom corrigé dans Railway
+**Endpoints diagnostiques ajoutés** : `/api/diag`, `/api/diag/claude`, `/api/diag/claude-test`
+**Statut** : ✅ Complété — app fonctionnelle, tutor Claude API actif
 
 ### [2026-03-28] — Cowork
 **Tâche** : Sprint 2 — UI Polish + Visual Components + Deploy Guide
@@ -202,8 +209,8 @@
 ## ✅ CHECKLIST DE VALIDATION — Sprint 1 v3
 
 ```
-1.  [ ] Olivia se connecte avec "ELEVE-001"
-2.  [ ] Voit le chat panel seul (warm-up)
+1.  [x] Olivia se connecte avec "ELEVE-001"
+2.  [x] Voit le chat panel seul (warm-up)
 3.  [ ] Claude la salue, lui demande comment va sa journée (2-3 échanges)
 4.  [ ] Claude présente un case detective
 5.  [ ] Le workspace slide in — CaseFile avec champs G/P/S
@@ -228,6 +235,15 @@
         qualité explication, nouveaux connecteurs, moment notable, action parent
 ```
 
+### Validé en production (2026-03-29)
+- Login ELEVE-001 → ✅ 200, retourne token + profil Olivia complet
+- Session start → ✅ 201, case sélectionné ("The Missing Concert Tickets"), greeting retourné
+- Chat message → ✅ 200, Claude API répond avec réponses personnalisées
+- Case selector → ✅ Priority engine fonctionne, sélection correcte
+- Supabase → ✅ Connecté, 3+ skills, 3+ cases, session créée en DB
+- Env vars → ✅ Toutes présentes (Anthropic, Deepgram, Supabase, JWT, CORS)
+- Anthropic API → ✅ Crédits ajoutés, réponses Claude fonctionnelles
+
 ---
 
-*Dernière mise à jour : 2026-03-28 — Sprint 2 complet par Cowork (UI polish, RateTimeline, FractionVisualizer, deploy guide)*
+*Dernière mise à jour : 2026-03-29 — Déploiement production fonctionnel, Claude API actif, validation E2E en cours*

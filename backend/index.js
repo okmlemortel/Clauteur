@@ -65,6 +65,40 @@ app.get('/api/diag', async (req, res) => {
   }
 });
 
+// Diagnostic: test Claude API directly
+app.get('/api/diag/claude', async (req, res) => {
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) {
+      return res.json({ error: 'ANTHROPIC_API_KEY not set', keyLength: 0 });
+    }
+    res.json({ keyPrefix: key.substring(0, 10) + '...', keyLength: key.length, testing: true });
+    // Don't actually call the API in the response — just test the client creation
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/diag/claude-test', async (req, res) => {
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) {
+      return res.json({ error: 'No API key' });
+    }
+    const client = new Anthropic({ apiKey: key });
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 50,
+      messages: [{ role: 'user', content: 'Say hello in one word.' }]
+    });
+    res.json({ success: true, response: response.content[0]?.text });
+  } catch (e) {
+    res.status(500).json({ error: e.message, type: e.constructor?.name, status: e.status });
+  }
+});
+
 // Setup WebSocket for voice
 setupVoiceWebSocket(server);
 

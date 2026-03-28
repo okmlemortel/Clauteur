@@ -91,15 +91,29 @@ function build(studentProfile, caseTemplate, sessionConfig) {
     throw new Error('Case template is required');
   }
 
-  const {
-    first_name = 'Élève',
-    age = 13,
-    languages = ['french'],
-    interests = [],
-    frustration_threshold = 'medium',
-    cognitive_strengths = [],
-    skill_map = {}
-  } = studentProfile;
+  // Handle both flat and nested profile shapes
+  const first_name = studentProfile.first_name || studentProfile.name || 'Élève';
+  const age = studentProfile.age || 13;
+  const interests = Array.isArray(studentProfile.interests) ? studentProfile.interests : [];
+  const frustration_threshold = studentProfile.frustration_threshold || 'medium';
+  const cognitive_strengths = Array.isArray(studentProfile.cognitive_strengths) ? studentProfile.cognitive_strengths : [];
+  const skill_map = studentProfile.skill_map || {};
+
+  // Languages can be an array ['french','english'] or an object {dominant:'en', fr_comfort:2, ...}
+  const rawLangs = studentProfile.languages;
+  let langText;
+  if (Array.isArray(rawLangs)) {
+    langText = rawLangs.includes('french') && rawLangs.includes('english')
+      ? 'French and English'
+      : rawLangs.includes('french') ? 'French' : 'English';
+  } else if (rawLangs && typeof rawLangs === 'object') {
+    // Object format from profile JSONB: {dominant, en_comfort, fr_comfort, code_switching}
+    const hasFr = rawLangs.fr_comfort > 0 || rawLangs.dominant === 'fr';
+    const hasEn = rawLangs.en_comfort > 0 || rawLangs.dominant === 'en';
+    langText = (hasFr && hasEn) ? 'French and English' : hasFr ? 'French' : 'English';
+  } else {
+    langText = 'French and English';
+  }
 
   const {
     title = 'Detective Case',
@@ -112,13 +126,6 @@ function build(studentProfile, caseTemplate, sessionConfig) {
   const {
     sessionStartTime = new Date().toISOString()
   } = sessionConfig || {};
-
-  // Build language text
-  const langText = languages.includes('french') && languages.includes('english')
-    ? 'French and English'
-    : languages.includes('french')
-      ? 'French'
-      : 'English';
 
   // Build interests text
   const interestsText = interests.length > 0

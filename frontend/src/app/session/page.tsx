@@ -42,6 +42,9 @@ export default function SessionPage() {
   // Field feedback
   const [fieldFeedback, setFieldFeedback] = useState<string | undefined>();
 
+  // Completed phases tracking
+  const [completedPhases, setCompletedPhases] = useState<('plan' | 'solve' | 'explain')[]>([]);
+
   // Redirect if not authenticated
   useEffect(() => {
     if (!authLoading && (!user || user.role !== 'student')) {
@@ -176,7 +179,14 @@ export default function SessionPage() {
       );
 
       if (response.phaseComplete) {
-        // Automatically transition to next phase based on current phase
+        // Mark current phase as completed
+        if (currentPhase === 'plan' || currentPhase === 'solve' || currentPhase === 'explain') {
+          setCompletedPhases((prev) =>
+            prev.includes(currentPhase) ? prev : [...prev, currentPhase]
+          );
+        }
+
+        // Automatically transition to next phase
         const nextPhase: Record<SessionPhase, SessionPhase> = {
           warmup: 'plan',
           plan: 'solve',
@@ -318,6 +328,7 @@ export default function SessionPage() {
               <WorkspacePanel
                 isVisible={true}
                 currentPhase={currentPhase}
+                completedPhases={completedPhases}
                 caseData={caseData || undefined}
                 onFieldChange={handleFieldChange}
                 onFieldSubmit={handleFieldSubmit}

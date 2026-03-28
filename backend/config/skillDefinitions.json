@@ -1,0 +1,229 @@
+{
+  "math": {
+    "number_sense": {
+      "id": "number_sense",
+      "name": "Number sense & estimation",
+      "description": "Intuition for quantities, magnitudes, and reasonableness of answers",
+      "prerequisites": [],
+      "grade_band": "4-5",
+      "olivia_score": 3
+    },
+    "operations_fluency": {
+      "id": "operations_fluency",
+      "name": "Operations fluency",
+      "description": "Mental and written +, -, ×, ÷ with whole numbers and simple decimals",
+      "prerequisites": ["number_sense"],
+      "grade_band": "4-5",
+      "olivia_score": 3
+    },
+    "decimals": {
+      "id": "decimals",
+      "name": "Decimal operations",
+      "description": "Multiplying, dividing, comparing decimals. Understanding place value past the decimal point.",
+      "prerequisites": ["operations_fluency"],
+      "grade_band": "5-6",
+      "olivia_score": 3
+    },
+    "fractions_operations": {
+      "id": "fractions_operations",
+      "name": "Fraction operations",
+      "description": "Adding, subtracting, multiplying fractions. Finding common denominators.",
+      "prerequisites": ["operations_fluency"],
+      "grade_band": "5-6",
+      "olivia_score": 3
+    },
+    "fractions_as_reasoning": {
+      "id": "fractions_as_reasoning",
+      "name": "Fractions as reasoning tools",
+      "description": "Using fractions to make decisions, compare quantities, reason about parts of wholes in context — not just computing.",
+      "prerequisites": ["fractions_operations", "number_sense"],
+      "grade_band": "6-7",
+      "olivia_score": 2
+    },
+    "estimation": {
+      "id": "estimation",
+      "name": "Estimation & reasonableness",
+      "description": "Ballpark answers before calculating. Checking if an answer makes sense.",
+      "prerequisites": ["number_sense"],
+      "grade_band": "4-6",
+      "olivia_score": 3
+    },
+    "proportional_direct": {
+      "id": "proportional_direct",
+      "name": "Direct proportional reasoning",
+      "description": "If X doubles, Y doubles. Scaling up. Unit rates.",
+      "prerequisites": ["operations_fluency", "fractions_operations"],
+      "grade_band": "6-7",
+      "olivia_score": 3
+    },
+    "proportional_inverse": {
+      "id": "proportional_inverse",
+      "name": "Inverse proportional reasoning",
+      "description": "Given a total, work backward to find per-unit or per-group amounts.",
+      "prerequisites": ["proportional_direct"],
+      "grade_band": "6-7",
+      "olivia_score": 3
+    },
+    "rate_conversion": {
+      "id": "rate_conversion",
+      "name": "Rate & unit conversion",
+      "description": "Converting between rates (per minute, per hour), understanding speed/time/distance, events per time period.",
+      "prerequisites": ["proportional_direct", "operations_fluency"],
+      "grade_band": "6-7",
+      "olivia_score": 1
+    },
+    "percentages": {
+      "id": "percentages",
+      "name": "Percentages",
+      "description": "Percent as proportion. Finding percentages of quantities. Percent increase/decrease.",
+      "prerequisites": ["proportional_direct", "decimals"],
+      "grade_band": "6-7",
+      "olivia_score": 0
+    },
+    "division_remainders": {
+      "id": "division_remainders",
+      "name": "Division with remainders in context",
+      "description": "Dividing and interpreting what the remainder means in real situations (round up? round down? fraction left over?).",
+      "prerequisites": ["operations_fluency", "fractions_as_reasoning"],
+      "grade_band": "5-6",
+      "olivia_score": 0
+    },
+    "negative_numbers": {
+      "id": "negative_numbers",
+      "name": "Negative numbers & integers",
+      "description": "Understanding, ordering, adding, and subtracting negative numbers. Number line reasoning.",
+      "prerequisites": ["number_sense", "operations_fluency"],
+      "grade_band": "6-7",
+      "olivia_score": 0
+    },
+    "variables_unknowns": {
+      "id": "variables_unknowns",
+      "name": "Variables & unknowns",
+      "description": "Using letters to represent unknown quantities. Solving simple one-step and two-step equations.",
+      "prerequisites": ["operations_fluency", "proportional_direct"],
+      "grade_band": "7-8",
+      "olivia_score": 0
+    },
+    "patterns_functions": {
+      "id": "patterns_functions",
+      "name": "Patterns & functions",
+      "description": "Identifying, extending, and describing numerical and visual patterns. Input-output rules.",
+      "prerequisites": ["operations_fluency", "variables_unknowns"],
+      "grade_band": "7-8",
+      "olivia_score": 0
+    }
+  },
+  "reasoning": {
+    "decomposition": {
+      "id": "decomposition",
+      "name": "Problem decomposition",
+      "description": "Breaking a complex problem into smaller, manageable parts.",
+      "prerequisites": [],
+      "olivia_score": 3
+    },
+    "sequencing": {
+      "id": "sequencing",
+      "name": "Logical sequencing",
+      "description": "Ordering steps, using temporal markers (first, then, finally, after that).",
+      "prerequisites": ["decomposition"],
+      "olivia_score": 3
+    },
+    "causal_chains": {
+      "id": "causal_chains",
+      "name": "Causal chain reasoning",
+      "description": "If A then B, and if B then C. Tracking consequences through multiple steps.",
+      "prerequisites": ["sequencing"],
+      "olivia_score": 3
+    },
+    "justification_depth": {
+      "id": "justification_depth",
+      "name": "Justification depth",
+      "description": "Giving multiple reasons, not just one. Building layered arguments.",
+      "prerequisites": ["causal_chains"],
+      "olivia_score": 3
+    },
+    "counterarguments": {
+      "id": "counterarguments",
+      "name": "Counter-argument handling",
+      "description": "Considering opposing views. Integrating or rebutting without shutting down.",
+      "prerequisites": ["justification_depth"],
+      "olivia_score": 3
+    },
+    "metacognition": {
+      "id": "metacognition",
+      "name": "Metacognition",
+      "description": "Awareness of one's own thinking process. Ability to identify what's hard and why.",
+      "prerequisites": ["decomposition"],
+      "olivia_score": 2
+    },
+    "transfer_unfamiliar": {
+      "id": "transfer_unfamiliar",
+      "name": "Transfer to unfamiliar problems",
+      "description": "Applying known reasoning strategies to completely new problem types.",
+      "prerequisites": ["decomposition", "causal_chains", "metacognition"],
+      "olivia_score": 0
+    },
+    "multi_constraint": {
+      "id": "multi_constraint",
+      "name": "Multi-constraint planning",
+      "description": "Solving problems where multiple constraints must be satisfied simultaneously.",
+      "prerequisites": ["decomposition", "sequencing"],
+      "olivia_score": 3
+    }
+  },
+  "expression": {
+    "connectors_en": {
+      "id": "connectors_en",
+      "name": "Logical connectors (EN)",
+      "description": "Using because, so, therefore, however, which means, since, given that, although, etc.",
+      "prerequisites": [],
+      "current_inventory": ["because", "so", "then", "but", "if", "which", "which means", "since", "given that"],
+      "olivia_score": 3
+    },
+    "connectors_fr": {
+      "id": "connectors_fr",
+      "name": "Logical connectors (FR)",
+      "description": "Using parce que, donc, alors, cependant, ce qui veut dire, puisque, en revanche, etc.",
+      "prerequisites": [],
+      "current_inventory": ["parce que", "alors", "puis", "ce qui", "quand"],
+      "target_connectors": ["donc", "puisque", "cependant", "ce qui veut dire", "en revanche", "d'abord", "ensuite", "enfin"],
+      "olivia_score": 2
+    },
+    "sentence_complexity_en": {
+      "id": "sentence_complexity_en",
+      "name": "Sentence complexity (EN)",
+      "description": "Building compound and complex sentences. Subordinate clauses. Hypotheticals.",
+      "prerequisites": ["connectors_en"],
+      "olivia_score": 3
+    },
+    "sentence_complexity_fr": {
+      "id": "sentence_complexity_fr",
+      "name": "Sentence complexity (FR)",
+      "description": "Moving beyond simple subject-verb-object. Using relative clauses, conditionals.",
+      "prerequisites": ["connectors_fr"],
+      "olivia_score": 2
+    },
+    "written_structure": {
+      "id": "written_structure",
+      "name": "Written structure",
+      "description": "Organizing ideas into clear sequence. Beginning-middle-end. Paragraph-level coherence.",
+      "prerequisites": ["connectors_en", "sentence_complexity_en"],
+      "olivia_score": 2
+    },
+    "fr_orthography": {
+      "id": "fr_orthography",
+      "name": "French orthography",
+      "description": "Spelling, conjugation, accents, agreement. Tracked patterns: verb endings, ne...pas, homophones.",
+      "prerequisites": [],
+      "known_errors": ["je nais pas → je n'ai pas", "soite → soit", "j'ais voulus → j'ai voulu", "fesais → faisais", "aller → allait"],
+      "olivia_score": 1
+    },
+    "oral_fluency_fr": {
+      "id": "oral_fluency_fr",
+      "name": "Oral fluency (FR)",
+      "description": "Speaking French with reasonable fluency. Tracked via Deepgram: pause patterns, self-corrections, connector usage.",
+      "prerequisites": ["connectors_fr"],
+      "olivia_score": 0
+    }
+  }
+}

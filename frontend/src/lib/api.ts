@@ -47,6 +47,7 @@ export interface CaseTemplate {
   plan_prompt: string;
   explain_language: 'en' | 'fr';
   target_skills: string[];
+  visual_component?: 'rate_timeline' | 'fractions' | null;
 }
 
 export interface SessionStartResponse {

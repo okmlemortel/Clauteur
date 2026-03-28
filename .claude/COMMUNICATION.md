@@ -7,45 +7,78 @@
 ## 🔴 EN ATTENTE D'ACTION
 
 ### [2026-03-28] — Olivier
-**Tâche** : Commit + push Sprint 1 v3 sur GitHub
+**Tâche** : Commit + push Sprint 2 sur GitHub
 **Type** : infra
 **Priorité** : Haute
-**Instructions** : Le code v3 a été généré localement. Doit être commité et poussé.
+**Instructions** : Sprint 2 code complete. Commit et push.
 **Statut** : ⏳ En attente
 
 ### [2026-03-28] — Olivier
-**Tâche** : Configurer Supabase + Railway + Vercel pour v3
+**Tâche** : Déployer Supabase + Railway + Vercel
 **Type** : infra
 **Priorité** : Haute — bloque les tests en production
-**Instructions** :
-1. Créer le projet Supabase → exécuter `supabase/migrations/001_initial_schema.sql` (tables: students, parents, skill_map, case_templates, sessions, parent_alerts)
-2. Créer le service Railway pour le backend (voir `docs/RAILWAY-SETUP.md`)
-3. Déployer le frontend sur Vercel
-4. Variables d'environnement requises :
-   - `ANTHROPIC_API_KEY` (clé prête)
-   - `DEEPGRAM_API_KEY` (clé prête)
-   - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
-   - `JWT_SECRET`
-5. Tester le flow complet (voir checklist validation ci-dessous)
-**Référence** : docs/RAILWAY-SETUP.md, backend/.env.example, frontend/.env.local.example
+**Instructions** : Suivre `docs/DEPLOY-GUIDE.md` (guide complet étape par étape)
+**Migrations** :
+1. `supabase/migrations/001_initial_schema.sql` (tables + seed)
+2. `supabase/migrations/002_content_package_v1.sql` (10 case templates)
+3. `supabase/migrations/003_visual_component.sql` (visual_component column)
+**Variables d'environnement** : `ANTHROPIC_API_KEY`, `DEEPGRAM_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `JWT_SECRET`, `CORS_ORIGIN`
 **Statut** : ⏳ En attente
 
-### [2026-03-28] — Claude.ai
-**Tâche** : Fournir les case templates supplémentaires
-**Type** : contenu pédagogique
-**Priorité** : Moyenne — 2 templates seed existent déjà
-**Instructions** : Créer 5-10 case templates couvrant les skills fragiles/untested d'Olivia. Insérer via SQL dans case_templates.
+### [2026-03-28] — Olivier
+**Tâche** : Activer Figma Dev Mode MCP Server
+**Type** : design
+**Priorité** : Moyenne — permet extraction tokens Figma directement
+**Instructions** : Figma desktop → Menu → Preferences → Enable Dev Mode MCP Server → restart Claude desktop
 **Statut** : ⏳ En attente
 
 ---
 
 ## 🟡 EN COURS
 
-*(rien en cours — build v3 terminé, en attente déploiement)*
+*(rien en cours — Sprint 2 build terminé, en attente commit + deploy)*
 
 ---
 
 ## ✅ COMPLÉTÉ
+
+### [2026-03-28] — Cowork
+**Tâche** : Sprint 2 — UI Polish + Visual Components + Deploy Guide
+**Type** : frontend + infra
+**Source** : Sprint 2 Spec de Claude.ai (2026-03-28)
+**Changements** :
+- `CaseFile.tsx` : colored left borders (teal/purple/amber/coral), lock icons, 8px/4px radii, 12px labels, 16px title
+- `PhaseIndicator.tsx` : filled/outlined dots, completed checkmarks, uppercase labels
+- `WorkspacePanel.tsx` : component loader system (visual component + case file), completedPhases tracking
+- `RateTimeline.tsx` : animated timeline, play/pause, rate slider, comparison mode, alignment detection
+- `FractionVisualizer.tsx` : circle/bar modes, steppers, common denominator animation, difference highlighting
+- `session/page.tsx` : completedPhases state tracking + propagation
+- `api.ts` : CaseTemplate.visual_component field added
+- `003_visual_component.sql` : ALTER TABLE + UPDATE case templates with visual components
+- Agent prompts externalized : `languageAgentPrompt.txt`, `tutorSystemPrompt.txt` (loaded via fs.readFileSync)
+- `docs/DEPLOY-GUIDE.md` : complete Supabase + Railway + Vercel guide with 22-step checklist
+**Validation** : All 10 backend JS files pass syntax. 0 TypeScript errors on frontend.
+**Statut** : ✅ Complété
+
+### [2026-03-28] — Cowork
+**Tâche** : Intégration Content Package v1 (Claude.ai → codebase)
+**Type** : contenu pédagogique + infra
+**Source** : Content Package v1 de Claude.ai (2026-03-28)
+**Changements** :
+- 10 case templates ajoutés via `supabase/migrations/002_content_package_v1.sql`
+- 28 skill definitions stockées dans `backend/config/skillDefinitions.json`
+- `caseSelector.js` réécrit avec le priority engine (+10/+7/+5/+3/+2/+1/-5 scoring)
+- `languageAgent.js` prompt enrichi (connector inventories, orthography patterns, scoring guides)
+- `memory.js` corrigé : `student_skills` → `skill_map`, suppression filtre `status` inexistant
+- Cognitive Analysis Agent prompt stocké dans `backend/config/cognitiveAnalysisPrompt.txt` (pour n8n Sprint 2)
+- COMMUNICATION.md mis à jour
+**Statut** : ✅ Complété
+
+### [2026-03-28] — Claude.ai
+**Tâche** : Fournir les case templates supplémentaires
+**Type** : contenu pédagogique
+**Livré** : Content Package v1 — 10 case templates, 28 skill definitions, 3 agent prompts, priority engine rules
+**Statut** : ✅ Livré — intégré par Cowork
 
 ### [2026-03-28] — Cowork
 **Tâche** : Sprint 1 v3 — Rebuild complet post-diagnostic
@@ -124,7 +157,16 @@
 |------|---------------|---------|------------|----------------|--------|
 | The Baker's Dilemma | fractions_as_reasoning, justification_depth, written_structure | cooking | 2 | fr | ✅ Seed |
 | The Missing Concert Tickets | fractions_as_reasoning, sequencing, justification_depth | mystery | 2 | fr | ✅ Seed |
-| *(à venir — Claude.ai doit fournir 5-10 templates supplémentaires)* | | | | | |
+| #001 The DJ's Dilemma | rate_conversion, estimation, sequencing | music | 2 | fr | ✅ CP v1 |
+| #002 The Mystery Ingredients | fractions_as_reasoning, proportional_direct, justification_depth | cooking | 2 | fr | ✅ CP v1 |
+| #003 The Commute Investigation | rate_conversion, metacognition, causal_chains | mystery | 2 | en | ✅ CP v1 |
+| #004 The Discount Detective | percentages, proportional_direct, counterarguments | mystery | 2 | fr | ✅ CP v1 |
+| #005 The Party Planner Returns | division_remainders, fractions_as_reasoning, multi_constraint | planning | 2 | fr | ✅ CP v1 |
+| #006 The Temperature Mystery | negative_numbers, causal_chains, connectors_en | mystery | 2 | en | ✅ CP v1 |
+| #007 The Secret Code | variables_unknowns, causal_chains, written_structure | mystery | 3 | fr | ✅ CP v1 |
+| #008 The Playlist Sequel | rate_conversion, proportional_direct, estimation | music | 3 | fr | ✅ CP v1 |
+| #009 The Fairness Debate | fractions_as_reasoning, counterarguments, justification_depth | planning | 2 | en | ✅ CP v1 |
+| #010 The Pattern Breaker | patterns_functions, transfer_unfamiliar, metacognition | mystery | 3 | fr | ✅ CP v1 |
 
 ---
 
@@ -188,4 +230,4 @@
 
 ---
 
-*Dernière mise à jour : 2026-03-28 — Sprint 1 v3 build par Cowork (spec post-diagnostic Claude.ai)*
+*Dernière mise à jour : 2026-03-28 — Sprint 2 complet par Cowork (UI polish, RateTimeline, FractionVisualizer, deploy guide)*

@@ -89,7 +89,7 @@ async function getKnowledgeMap(studentId) {
  */
 async function getSkillMap(studentId) {
   const { data, error } = await supabase
-    .from('student_skills')
+    .from('skill_map')
     .select('*')
     .eq('student_id', studentId);
 
@@ -113,7 +113,7 @@ async function getSkillMap(studentId) {
  */
 async function updateSkillScore(studentId, skillId, score) {
   const { data, error } = await supabase
-    .from('student_skills')
+    .from('skill_map')
     .upsert({
       student_id: studentId,
       skill_id: skillId,
@@ -138,8 +138,12 @@ async function getCaseTemplates(filters = {}) {
     .from('case_templates')
     .select('*');
 
-  if (filters.status) {
-    query = query.eq('status', filters.status);
+  if (filters.difficulty) {
+    query = query.eq('difficulty', filters.difficulty);
+  }
+
+  if (filters.anchor_type) {
+    query = query.eq('anchor_type', filters.anchor_type);
   }
 
   const { data, error } = await query;

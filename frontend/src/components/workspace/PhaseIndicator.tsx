@@ -2,58 +2,95 @@
 
 import React from 'react';
 
-type Phase = 'plan' | 'solve' | 'explain' | null;
-
 interface PhaseIndicatorProps {
-  currentPhase: Phase;
+  currentPhase: 'plan' | 'solve' | 'explain' | null;
+  completedPhases?: ('plan' | 'solve' | 'explain')[];
 }
 
-export const PhaseIndicator: React.FC<PhaseIndicatorProps> = ({ currentPhase }) => {
-  const phases: Array<{ id: Phase; label: string }> = [
+export const PhaseIndicator: React.FC<PhaseIndicatorProps> = ({
+  currentPhase,
+  completedPhases = [],
+}) => {
+  const phases: Array<{ id: 'plan' | 'solve' | 'explain'; label: string }> = [
     { id: 'plan', label: 'plan' },
     { id: 'solve', label: 'solve' },
     { id: 'explain', label: 'explain' },
   ];
 
-  // Teal color for active: #1D9E75
-  const TEAL_ACTIVE = '#1D9E75';
-  const SLATE_INACTIVE = '#cbd5e1';
+  const TEAL = '#1D9E75';
+  const GRAY = '#CBD5E1';
+
+  const getDotState = (phaseId: 'plan' | 'solve' | 'explain') => {
+    if (phaseId === currentPhase) {
+      return 'active'; // Teal filled
+    }
+    if (completedPhases.includes(phaseId)) {
+      return 'completed'; // Teal outlined with checkmark
+    }
+    return 'inactive'; // Gray outlined
+  };
 
   return (
-    <div className="flex flex-col items-center gap-3 py-4 px-4 border-t border-slate-200 bg-slate-50">
-      {/* Phase Indicator - NOT clickable, display only */}
-      <div className="flex items-center gap-6">
-        {phases.map((phase, idx) => (
-          <React.Fragment key={phase.id}>
-            <div className="flex flex-col items-center gap-2">
-              {/* Dot - teal if active, slate if inactive */}
-              <div
-                className="w-3 h-3 rounded-full transition-all"
-                style={{
-                  backgroundColor: phase.id === currentPhase ? TEAL_ACTIVE : SLATE_INACTIVE,
-                  transform: phase.id === currentPhase ? 'scale(1.3)' : 'scale(1)',
-                }}
-              />
-              {/* Label */}
-              <span className="text-xs font-medium text-slate-600">
-                {phase.label}
-              </span>
+    <div className="flex items-center justify-center gap-2 py-4 px-4 border-t border-slate-200 bg-slate-50">
+      {phases.map((phase, idx) => (
+        <React.Fragment key={phase.id}>
+          <div className="flex flex-col items-center gap-1.5">
+            {/* Dot */}
+            <div className="relative">
+              {getDotState(phase.id) === 'active' && (
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: TEAL }}
+                />
+              )}
+              {getDotState(phase.id) === 'completed' && (
+                <div className="relative">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: `2px solid ${TEAL}`,
+                    }}
+                  />
+                  <svg
+                    className="absolute inset-0 w-3 h-3 text-teal-600"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+              )}
+              {getDotState(phase.id) === 'inactive' && (
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: `2px solid ${GRAY}`,
+                  }}
+                />
+              )}
             </div>
 
-            {/* Divider between phases */}
-            {idx < phases.length - 1 && (
-              <div className="h-px w-8 bg-slate-300" />
-            )}
-          </React.Fragment>
-        ))}
-      </div>
+            {/* Label */}
+            <span className="text-[11px] font-semibold uppercase text-slate-600 tracking-wide">
+              {phase.label}
+            </span>
+          </div>
 
-      {/* Current phase name display */}
-      {currentPhase && (
-        <p className="text-xs font-semibold text-slate-700 mt-2">
-          Currently in: <span style={{ color: TEAL_ACTIVE }}>{currentPhase}</span>
-        </p>
-      )}
+          {/* Connecting line */}
+          {idx < phases.length - 1 && (
+            <div
+              className="h-px w-6 mb-4"
+              style={{ backgroundColor: GRAY }}
+            />
+          )}
+        </React.Fragment>
+      ))}
     </div>
   );
 };

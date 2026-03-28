@@ -180,6 +180,8 @@ async function getCaseTemplate(caseId) {
 async function createSession(sessionData) {
   const id = uuidv4();
 
+  const casefile = sessionData.casefile || {};
+
   const { data, error } = await supabase
     .from('sessions')
     .insert({
@@ -187,9 +189,11 @@ async function createSession(sessionData) {
       student_id: sessionData.student_id,
       started_at: new Date().toISOString(),
       case_template_id: sessionData.case_template_id || null,
-      mode: sessionData.mode || 'PROGRAMME',
       max_alert_level: 0,
-      casefile: sessionData.casefile || {},
+      casefile_given: casefile.given || null,
+      casefile_problem: casefile.problem || null,
+      casefile_solution: casefile.solution || null,
+      casefile_explanation: casefile.explanation || null,
       edit_log: sessionData.edit_log || [],
       voice_transcripts: sessionData.voice_transcripts || [],
       cognitive_summary: sessionData.cognitive_summary || {},
@@ -209,31 +213,48 @@ async function createSession(sessionData) {
 /**
  * Update session with new data
  */
-async function updateSession(sessionId, data) {
-  const updateData = { ...data };
+async function updateSession(sessionId, updateInput) {
+  const updateData = {};
+
+  // Map fields to actual DB column names
+  if (updateInput.ended_at) updateData.ended_at = updateInput.ended_at;
+  if (updateInput.max_alert_level !== undefined) updateData.max_alert_level = updateInput.max_alert_level;
+
+  // Casefile: map from JSONB object to individual columns
+  if (updateInput.casefile) {
+    const cf = updateInput.casefile;
+    if (cf.given !== undefined) updateData.casefile_given = cf.given;
+    if (cf.problem !== undefined) updateData.casefile_problem = cf.problem;
+    if (cf.solution !== undefined) updateData.casefile_solution = cf.solution;
+    if (cf.explanation !== undefined) updateData.casefile_explanation = cf.explanation;
+  }
+
+  // JSONB columns that exist in the schema
+  if (updateInput.edit_log) updateData.edit_log = updateInput.edit_log;
+  if (updateInput.voice_transcripts) updateData.voice_transcripts = updateInput.voice_transcripts;
+  if (updateInput.cognitive_summary) updateData.cognitive_summary = updateInput.cognitive_summary;
+  if (updateInput.language_analysis) updateData.language_analysis = updateInput.language_analysis;
+
+  // Report goes to parent_report column
+  if (updateInput.report) updateData.parent_report = updateInput.report;
+
+  // Phases completed
+  if (updateInput.phases_completed) updateData.phases_completed = updateInput.phases_completed;
 
   // Calculate duration if we have ended_at
-  if (data.ended_at && data.started_at) {
-    const start = new Date(data.started_at);
-    const end = new Date(data.ended_at);
-    updateData.duration_minutes = Math.round((end - start) / 60000);
-  }
+  if (updateInput.ended_at) {
+    // Fetch the session's started_at to calculate duration
+    const { data: existing } = await supabase
+      .from('sessions')
+      .select('started_at')
+      .eq('id', sessionId)
+      .single();
 
-  // Preserve arrays/objects if provided
-  if (data.casefile) {
-    updateData.casefile = data.casefile;
-  }
-  if (data.edit_log) {
-    updateData.edit_log = data.edit_log;
-  }
-  if (data.voice_transcripts) {
-    updateData.voice_transcripts = data.voice_transcripts;
-  }
-  if (data.cognitive_summary) {
-    updateData.cognitive_summary = data.cognitive_summary;
-  }
-  if (data.language_analysis) {
-    updateData.language_analysis = data.language_analysis;
+    if (existing?.started_at) {
+      const start = new Date(existing.started_at);
+      const end = new Date(updateInput.ended_at);
+      updateData.duration_minutes = Math.round((end - start) / 60000);
+    }
   }
 
   const { data: result, error } = await supabase

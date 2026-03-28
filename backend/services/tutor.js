@@ -158,8 +158,10 @@ async function chat(sessionContext) {
  * Generate a warm greeting for session start
  */
 async function generateGreeting(studentProfile) {
+  // Extract name from profile (could be nested in profile JSONB or flat)
+  const name = studentProfile?.profile?.name || studentProfile?.name || studentProfile?.first_name || 'Élève';
   // Minimal system prompt for greeting
-  const greetingSystemPrompt = `You are a warm, encouraging math tutor for a student named ${studentProfile.first_name || 'Élève'}.
+  const greetingSystemPrompt = `You are a warm, encouraging math tutor for a student named ${name}.
 Generate a brief, friendly greeting that welcomes them to a tutoring session.
 Respond ONLY with valid JSON in this format:
 {

@@ -39,6 +39,32 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Diagnostic: test Supabase connection
+app.get('/api/diag', async (req, res) => {
+  try {
+    const supabase = require('./services/supabase');
+    const { data: students, error: studentsErr } = await supabase.from('students').select('id, internal_code').limit(3);
+    const { data: cases, error: casesErr } = await supabase.from('case_templates').select('id, title').limit(3);
+    const { data: skills, error: skillsErr } = await supabase.from('skill_map').select('skill_id, score').limit(3);
+    res.json({
+      supabase: 'connected',
+      students: studentsErr ? { error: studentsErr.message } : students,
+      cases: casesErr ? { error: casesErr.message } : { count: cases?.length },
+      skills: skillsErr ? { error: skillsErr.message } : { count: skills?.length },
+      env: {
+        hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
+        hasDeepgramKey: !!process.env.DEEPGRAM_API_KEY,
+        hasSupabaseUrl: !!process.env.SUPABASE_URL,
+        hasSupabaseKey: !!process.env.SUPABASE_SERVICE_KEY,
+        hasJwtSecret: !!process.env.JWT_SECRET,
+        corsOrigin: CORS_ORIGIN
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Setup WebSocket for voice
 setupVoiceWebSocket(server);
 

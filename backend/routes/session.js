@@ -23,9 +23,13 @@ const MAX_SESSION_DURATION_MINUTES = 20;
  */
 router.post('/start', authenticateToken, async (req, res) => {
   try {
+    console.log('[session/start] Step 1: User from token:', JSON.stringify(req.user));
+
     const studentId = req.user.role === 'parent'
       ? (await memory.getStudentFromParent(req.user.userId))?.id
       : req.user.userId;
+
+    console.log('[session/start] Step 2: studentId resolved:', studentId);
 
     if (!studentId) {
       return res.status(400).json({ error: 'Student ID could not be determined' });
@@ -37,21 +41,26 @@ router.post('/start', authenticateToken, async (req, res) => {
     let studentProfile;
     try {
       studentProfile = await memory.getStudentProfile(studentId);
+      console.log('[session/start] Step 3: profile loaded:', studentProfile?.id);
     } catch (error) {
+      console.error('[session/start] Step 3 FAIL: profile error:', error);
       return res.status(404).json({ error: 'Student profile not found' });
     }
 
     // Get skill map for the student
     const skillMap = await memory.getSkillMap(studentId);
     studentProfile.skill_map = skillMap;
+    console.log('[session/start] Step 4: skillMap loaded, keys:', Object.keys(skillMap).length);
 
     // Select next case using caseSelector
     const caseTemplate = await caseSelector.selectNextCase(studentId);
+    console.log('[session/start] Step 5: case selected:', caseTemplate?.id, caseTemplate?.title);
     if (!caseTemplate) {
       return res.status(400).json({ error: 'No suitable case available for this student' });
     }
 
     // Create session in database
+    console.log('[session/start] Step 6: creating session...');
     const sessionData = await memory.createSession({
       student_id: studentId,
       case_template_id: caseTemplate.id,
@@ -68,10 +77,14 @@ router.post('/start', authenticateToken, async (req, res) => {
       language_analysis: {}
     });
 
+    console.log('[session/start] Step 7: session created:', sessionData.id);
+
     // Build system prompt
     const systemPrompt = buildSystemPrompt(studentProfile, caseTemplate, {
       sessionStartTime: sessionData.started_at
     });
+
+    console.log('[session/start] Step 8: system prompt built, length:', systemPrompt.length);
 
     // Generate initial greeting
     let initialGreeting;
@@ -134,7 +147,7 @@ router.post('/start', authenticateToken, async (req, res) => {
       greeting: initialGreeting.message
     });
   } catch (error) {
-    console.error('Session start error:', error);
+    console.error('[session/start] CRASH at unknown step:', error?.message || error, error?.stack || '');
     res.status(error.status || 500).json({ error: error.message || 'Failed to start session' });
   }
 });

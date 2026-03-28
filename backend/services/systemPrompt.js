@@ -73,7 +73,12 @@ You MUST respond ONLY with valid JSON (no markdown, no explanations):
   }
 }
 
-CRITICAL: Return only valid JSON. No extra text before or after.`;
+CRITICAL FORMAT RULES:
+- Respond ONLY with a valid JSON object. No markdown, no code fences, no preamble.
+- Do not wrap your response in \`\`\`json\`\`\` blocks.
+- Start your response with { and end with }
+- Every field in the JSON schema above must be present.
+- No extra text before or after the JSON.`;
 }
 
 /**

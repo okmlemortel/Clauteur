@@ -15,7 +15,15 @@
       "Bash(git push:*)",
       "Bash(git -C /Users/okm/Documents/Dev/Clauteur status)",
       "Bash(git -C /Users/okm/Documents/Dev/Clauteur diff --stat)",
-      "Bash(git -C /Users/okm/Documents/Dev/Clauteur log --oneline -5)"
+      "Bash(git -C /Users/okm/Documents/Dev/Clauteur log --oneline -5)",
+      "Bash(git -C /Users/okm/Documents/Dev/Clauteur add backend/services/deepgram.js)",
+      "Bash(git -C /Users/okm/Documents/Dev/Clauteur commit -m \"Fix Deepgram SDK v5 API: apiKey, async connect, event names, sendMedia\")",
+      "Bash(git -C /Users/okm/Documents/Dev/Clauteur push)",
+      "Bash(git -C /Users/okm/Documents/Dev/Clauteur add frontend/src/components/chat/ChatPanel.tsx frontend/src/app/session/page.tsx)",
+      "Bash(git -C /Users/okm/Documents/Dev/Clauteur commit -m \"Add live voice transcript display during recording\")",
+      "Bash(git -C /Users/okm/Documents/Dev/Clauteur add backend/services/deepgram.js backend/routes/voice.js)",
+      "Bash(git -C /Users/okm/Documents/Dev/Clauteur commit -m \"Fix voice: await Deepgram connection, remove wrong encoding config\")",
+      "Bash(git -C /Users/okm/Documents/Dev/Clauteur commit -m \"Fix Deepgram SDK v5: connect\\(\\), waitForOpen\\(\\), socket.send\\(\\), Results type\")"
     ]
   }
 }

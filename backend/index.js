@@ -99,6 +99,23 @@ app.post('/api/diag/claude-test', async (req, res) => {
   }
 });
 
+// Diagnostic: LLM provider status
+app.get('/api/diag/llm', async (req, res) => {
+  try {
+    const { checkProvider, ROLE_PROVIDER, getProviderInfo } = require('./services/llmProvider');
+    const tutorStatus = await checkProvider('tutor');
+    const languageStatus = await checkProvider('language_agent');
+    res.json({
+      config: ROLE_PROVIDER,
+      info: getProviderInfo(),
+      tutor: tutorStatus,
+      language_agent: languageStatus
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Setup WebSocket for voice
 setupVoiceWebSocket(server);
 

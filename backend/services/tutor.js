@@ -1,57 +1,47 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const { chat: llmChat, isProviderAvailable } = require('./llmProvider');
 const { build } = require('./systemPrompt');
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const USE_REAL_API = !!ANTHROPIC_API_KEY;
-
 /**
- * Initialize Anthropic client (only if API key present)
+ * Call the tutor LLM and parse the structured JSON response.
  */
-function getClient() {
-  if (!USE_REAL_API) {
-    return null;
-  }
-  return new Anthropic({
-    apiKey: ANTHROPIC_API_KEY
-  });
-}
-
-/**
- * Call Claude Sonnet API with structured JSON response requirement
- */
-async function callClaudeAPI(client, systemPrompt, messages) {
+async function callTutorLLM(systemPrompt, messages) {
   try {
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: messages.map(m => ({
-        role: m.role,
-        content: m.content
-      }))
-    });
+    const raw = await llmChat('tutor', systemPrompt, messages);
 
-    const content = response.content[0]?.text || '';
-
-    // Parse the response as JSON
+    // Parse the response as JSON (llmProvider already strips thinking + code fences)
     let parsed;
     try {
-      parsed = JSON.parse(content);
+      parsed = JSON.parse(raw);
     } catch (e) {
-      console.error('Failed to parse Claude response as JSON:', content);
-      throw new Error('Claude did not return valid JSON');
+      // If JSON parse fails, return raw text as message with safe defaults
+      console.warn('[Tutor] Failed to parse JSON response, returning raw:', e.message);
+      return {
+        message: raw,
+        phase: null,
+        alertLevel: 0,
+        fieldFeedback: null,
+        languageSwitchTo: null,
+        cognitiveNotes: {
+          justificationLevel: 0,
+          connectorsObserved: [],
+          engagement: 'medium',
+          thinkAloudQuality: null,
+          notableObservation: null,
+          skillsExercised: []
+        }
+      };
     }
 
     // Validate and normalize response
     return normalizeResponse(parsed);
   } catch (error) {
-    console.error('Claude API error:', error);
+    console.error('Tutor LLM error:', error);
     throw error;
   }
 }
 
 /**
- * Normalize and validate Claude response
+ * Normalize and validate tutor response
  */
 function normalizeResponse(response) {
   // Ensure message exists
@@ -128,25 +118,18 @@ function getFallbackResponse() {
 }
 
 /**
- * Chat with Claude Sonnet
+ * Chat with the tutor LLM
  * sessionContext: { systemPrompt, messages, caseFile, currentPhase, studentProfile }
  * Returns structured response with message, phase, alertLevel, fieldFeedback, etc.
  */
 async function chat(sessionContext) {
   try {
-    // If no API key, use fallback mode
-    if (!USE_REAL_API) {
-      console.log('No ANTHROPIC_API_KEY detected. Using fallback response.');
+    if (!isProviderAvailable('tutor')) {
+      console.log('[Tutor] No provider available. Using fallback response.');
       return getFallbackResponse();
     }
 
-    // Use real Claude API
-    const client = getClient();
-    if (!client) {
-      return getFallbackResponse();
-    }
-
-    const response = await callClaudeAPI(client, sessionContext.systemPrompt, sessionContext.messages);
+    const response = await callTutorLLM(sessionContext.systemPrompt, sessionContext.messages);
     return response;
   } catch (error) {
     console.error('Chat error, using fallback:', error.message);
@@ -158,9 +141,8 @@ async function chat(sessionContext) {
  * Generate a warm greeting for session start
  */
 async function generateGreeting(studentProfile) {
-  // Extract name from profile (could be nested in profile JSONB or flat)
   const name = studentProfile?.profile?.name || studentProfile?.name || studentProfile?.first_name || 'Élève';
-  // Minimal system prompt for greeting
+
   const greetingSystemPrompt = `You are a warm, encouraging math tutor for a student named ${name}.
 Generate a brief, friendly greeting that welcomes them to a tutoring session.
 Respond ONLY with valid JSON in this format:
@@ -188,16 +170,11 @@ Respond ONLY with valid JSON in this format:
   ];
 
   try {
-    if (!USE_REAL_API) {
+    if (!isProviderAvailable('tutor')) {
       return getFallbackResponse();
     }
 
-    const client = getClient();
-    if (!client) {
-      return getFallbackResponse();
-    }
-
-    const response = await callClaudeAPI(client, greetingSystemPrompt, messages);
+    const response = await callTutorLLM(greetingSystemPrompt, messages);
     return response;
   } catch (error) {
     console.error('Greeting generation error:', error);

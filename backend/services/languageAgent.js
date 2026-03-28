@@ -1,9 +1,6 @@
-const Anthropic = require('@anthropic-ai/sdk');
 const fs = require('fs');
 const path = require('path');
-
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const USE_REAL_API = !!ANTHROPIC_API_KEY;
+const { chat: llmChat, isProviderAvailable } = require('./llmProvider');
 
 // Load language agent prompt from config file, with fallback
 let LANGUAGE_AGENT_PROMPT;
@@ -52,80 +49,66 @@ FR ORTHOGRAPHY — KNOWN ERROR PATTERNS (flag if they recur OR if she gets them 
 }
 
 /**
- * Initialize Anthropic client (only if API key present)
+ * Empty analysis result (used as fallback)
  */
-function getClient() {
-  if (!USE_REAL_API) {
-    return null;
-  }
-  return new Anthropic({
-    apiKey: ANTHROPIC_API_KEY
-  });
+function getEmptyAnalysis(language) {
+  return {
+    language_detected: language || 'en',
+    word_count: 0,
+    sentence_count: 0,
+    avg_words_per_sentence: 0,
+    connectors_used: [],
+    connectors_new: [],
+    complexity_score: 2,
+    fr_orthography_errors: [],
+    justification_depth: 2,
+    notable_expression: null
+  };
 }
 
 /**
- * Analyze student text using Claude Haiku
- * Runs async, does not block
- * Returns a promise
+ * Analyze student text using the language agent LLM.
+ * Runs async, does not block.
+ * Returns a promise.
  */
 async function analyze(text, language) {
-  // Fire async analysis without blocking
   return new Promise((resolve) => {
-    // Queue the analysis to run in background
     setImmediate(async () => {
       try {
-        if (!USE_REAL_API) {
-          // Return empty analysis in stub mode
-          resolve({
-            language_detected: language || 'en',
-            word_count: 0,
-            sentence_count: 0,
-            avg_words_per_sentence: 0,
-            connectors_used: [],
-            connectors_new: [],
-            complexity_score: 2,
-            fr_orthography_errors: [],
-            justification_depth: 2,
-            notable_expression: null
-          });
+        if (!isProviderAvailable('language_agent')) {
+          resolve(getEmptyAnalysis(language));
           return;
         }
 
-        const client = getClient();
-        if (!client) {
-          resolve({
-            language_detected: language || 'en',
-            word_count: 0,
-            sentence_count: 0,
-            avg_words_per_sentence: 0,
-            connectors_used: [],
-            connectors_new: [],
-            complexity_score: 2,
-            fr_orthography_errors: [],
-            justification_depth: 2,
-            notable_expression: null
-          });
-          return;
-        }
+        const messages = [
+          {
+            role: 'user',
+            content: `Analyze this text: "${text}"`
+          }
+        ];
 
-        const response = await client.messages.create({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 256,
-          system: LANGUAGE_AGENT_PROMPT,
-          messages: [
-            {
-              role: 'user',
-              content: `Analyze this text: "${text}"`
-            }
-          ]
-        });
+        // llmProvider already strips thinking blocks + code fences
+        const raw = await llmChat('language_agent', LANGUAGE_AGENT_PROMPT, messages);
 
-        const content = response.content[0]?.text || '{}';
         let parsed = {};
         try {
-          parsed = JSON.parse(content);
+          parsed = JSON.parse(raw);
         } catch (e) {
-          console.error('Failed to parse language analysis:', e);
+          console.warn('[LanguageAgent] Failed to parse JSON response:', e.message);
+          // Graceful fallback: return basic word count from raw text
+          resolve({
+            language_detected: language || 'unknown',
+            word_count: text.split(/\s+/).length,
+            sentence_count: 0,
+            avg_words_per_sentence: 0,
+            connectors_used: [],
+            connectors_new: [],
+            complexity_score: 0,
+            fr_orthography_errors: [],
+            justification_depth: 0,
+            notable_expression: null
+          });
+          return;
         }
 
         resolve({
@@ -142,18 +125,7 @@ async function analyze(text, language) {
         });
       } catch (error) {
         console.error('Language analysis error:', error);
-        resolve({
-          language_detected: language || 'en',
-          word_count: 0,
-          sentence_count: 0,
-          avg_words_per_sentence: 0,
-          connectors_used: [],
-          connectors_new: [],
-          complexity_score: 2,
-          fr_orthography_errors: [],
-          justification_depth: 2,
-          notable_expression: null
-        });
+        resolve(getEmptyAnalysis(language));
       }
     });
   });

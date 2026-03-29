@@ -480,24 +480,34 @@ async function updateSessionStatus(sessionId, status, extraFields = {}) {
 }
 
 /**
- * Auto-abandon sessions paused for >24 hours
+ * Auto-abandon stale sessions:
+ * - Paused for >24 hours
+ * - Active but no activity for >1 hour (ghost sessions from server restarts)
  */
 async function abandonStaleSessions(studentId) {
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const now = new Date().toISOString();
+  const pausedCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const activeCutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
-  const { data, error } = await supabase
+  // Abandon paused sessions older than 24h
+  const { error: err1 } = await supabase
     .from('sessions')
-    .update({ status: 'abandoned', ended_at: new Date().toISOString() })
+    .update({ status: 'abandoned', ended_at: now })
     .eq('student_id', studentId)
     .eq('status', 'paused')
-    .lt('last_active_at', cutoff)
-    .select();
+    .lt('last_active_at', pausedCutoff);
 
-  if (error) {
-    console.error('Error abandoning stale sessions:', error);
-  }
+  if (err1) console.error('Error abandoning paused sessions:', err1);
 
-  return data || [];
+  // Abandon ghost active sessions (>1h with no activity — likely server restart)
+  const { error: err2 } = await supabase
+    .from('sessions')
+    .update({ status: 'abandoned', ended_at: now })
+    .eq('student_id', studentId)
+    .eq('status', 'active')
+    .lt('last_active_at', activeCutoff);
+
+  if (err2) console.error('Error abandoning ghost sessions:', err2);
 }
 
 module.exports = {

@@ -206,17 +206,45 @@ export const api = {
 
   // Alerts
   getAlerts: async (studentId: string) => {
-    const data = await makeRequest<
-      Array<{
-        alertId: string;
-        studentId: string;
-        level: 1 | 2 | 3;
+    const data = await makeRequest<{
+      unread: Array<{
+        id: string;
+        student_id: string;
+        level: number;
         message: string;
-        createdAt: string;
-        read: boolean;
-      }>
-    >(`/students/${studentId}/alerts`);
-    return data;
+        created_at: string;
+        read_at: string | null;
+      }>;
+      read: Array<{
+        id: string;
+        student_id: string;
+        level: number;
+        message: string;
+        created_at: string;
+        read_at: string;
+      }>;
+      total: number;
+    }>(`/reports/student/${studentId}/alerts`);
+    // Normalize to the format the overview page expects
+    const allAlerts = [
+      ...(data.unread || []).map(a => ({
+        alertId: a.id,
+        studentId: a.student_id,
+        level: a.level as 1 | 2 | 3,
+        message: a.message,
+        createdAt: a.created_at,
+        read: false,
+      })),
+      ...(data.read || []).map(a => ({
+        alertId: a.id,
+        studentId: a.student_id,
+        level: a.level as 1 | 2 | 3,
+        message: a.message,
+        createdAt: a.created_at,
+        read: true,
+      })),
+    ];
+    return allAlerts;
   },
 
   markAlertRead: async (alertId: string) => {

@@ -25,7 +25,7 @@ export default function LoginPage() {
       // The role is determined by the backend based on the code
       // Redirect based on user's role stored in localStorage after login
       const role = localStorage.getItem('user_role');
-      router.push(role === 'student' ? '/session' : '/parent');
+      router.push(role === 'student' ? '/dashboard' : '/parent');
     } catch (err) {
       setError('Code d&apos;accès invalide. Veuillez réessayer.');
       console.error(err);

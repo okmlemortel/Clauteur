@@ -88,7 +88,7 @@ CRITICAL FORMAT RULES:
  * @param {Object} sessionConfig - Session configuration object
  * @returns {string} Full system prompt for Claude API
  */
-function build(studentProfile, caseTemplate, sessionConfig) {
+function build(studentProfile, caseTemplate, sessionConfig = {}) {
   if (!studentProfile) {
     throw new Error('Student profile is required');
   }
@@ -129,7 +129,9 @@ function build(studentProfile, caseTemplate, sessionConfig) {
   } = caseTemplate;
 
   const {
-    sessionStartTime = new Date().toISOString()
+    sessionStartTime = new Date().toISOString(),
+    isResumed = false,
+    currentPhase = null
   } = sessionConfig || {};
 
   // Build interests text
@@ -160,6 +162,12 @@ function build(studentProfile, caseTemplate, sessionConfig) {
     .replace(/{SESSION_START_TIME}/g, sessionStartTime)
     .replace(/{NARRATIVE}/g, narrative)
     .replace(/{PLAN_PROMPT}/g, plan_prompt);
+
+  // Add resume context if this is a resumed session
+  if (isResumed) {
+    const resumeNote = `\n\nRESUMED SESSION CONTEXT:\nThis is a resumed session. ${first_name} was working on "${title}" and was in the ${currentPhase || 'warmup'} phase when they left. Pick up where you left off naturally. Don't re-introduce the case or repeat earlier instructions. A warm, brief "welcome back" is appropriate — then continue the work.`;
+    return systemPrompt + resumeNote;
+  }
 
   return systemPrompt;
 }

@@ -9,17 +9,42 @@ const { build: buildSystemPrompt } = require('../services/systemPrompt');
 const { generateReport } = require('../services/reportGenerator');
 const alerts = require('../services/alerts');
 
-// In-memory session store
+// In-memory session store (hot cache — DB is source of truth)
 // Structure: { systemPrompt, studentId, studentProfile, caseTemplate, startedAt, messages: [...], casefile: {}, ... }
 const activeSessions = new Map();
 
-const MAX_SESSION_DURATION_MINUTES = 20;
+/**
+ * GET /list
+ * Get session list for student dashboard (resumable + completed)
+ */
+router.get('/list', authenticateToken, async (req, res) => {
+  try {
+    const studentId = req.user.role === 'parent'
+      ? (await memory.getStudentFromParent(req.user.userId))?.id
+      : req.user.userId;
+
+    if (!studentId) {
+      return res.status(400).json({ error: 'Student ID could not be determined' });
+    }
+
+    // Auto-abandon stale sessions (>24h paused)
+    await memory.abandonStaleSessions(studentId);
+
+    const [resumable, completed] = await Promise.all([
+      memory.getResumableSessions(studentId),
+      memory.getCompletedSessions(studentId)
+    ]);
+
+    res.json({ resumable, completed });
+  } catch (error) {
+    console.error('Session list error:', error);
+    res.status(500).json({ error: 'Failed to get sessions' });
+  }
+});
 
 /**
  * POST /start
  * Create a new tutoring session
- * Calls caseSelector to pick next case, builds system prompt, generates greeting
- * Returns: { session_id, case, greeting }
  */
 router.post('/start', authenticateToken, async (req, res) => {
   let lastStep = 0;
@@ -79,6 +104,13 @@ router.post('/start', authenticateToken, async (req, res) => {
       voice_transcripts: [],
       cognitive_summary: {},
       language_analysis: {}
+    });
+
+    // Set new persistence columns
+    await memory.updateSessionStatus(sessionData.id, 'active', {
+      current_phase: 'warmup',
+      last_active_at: new Date().toISOString(),
+      elapsed_seconds: 0
     });
 
     lastStep = 7;
@@ -141,6 +173,15 @@ router.post('/start', authenticateToken, async (req, res) => {
       languageAnalysisData: {}
     });
 
+    // Persist the greeting message to DB
+    await memory.saveMessage(
+      sessionData.id,
+      'assistant',
+      initialGreeting.message,
+      'chat',
+      initialGreeting.phase
+    );
+
     res.status(201).json({
       session_id: sessionData.id,
       case: {
@@ -176,11 +217,20 @@ router.post('/:sessionId/message', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'message is required' });
     }
 
-    // Get active session
-    const sessionData = activeSessions.get(sessionId);
+    // Get active session — try memory first, then try to rehydrate from DB
+    let sessionData = activeSessions.get(sessionId);
     if (!sessionData) {
-      return res.status(404).json({ error: 'Session not found or expired' });
+      // Attempt to rehydrate from DB (session was paused/server restarted)
+      sessionData = await rehydrateSession(sessionId);
+      if (!sessionData) {
+        return res.status(404).json({ error: 'Session not found or expired' });
+      }
     }
+
+    // Update last_active_at
+    memory.updateSessionStatus(sessionId, 'active', {
+      last_active_at: new Date().toISOString()
+    }).catch(err => console.error('Failed to update last_active_at:', err));
 
     // Check for alerts in user message
     const { level: alertLevel, trigger } = alerts.checkForAlerts(message);
@@ -196,6 +246,10 @@ router.post('/:sessionId/message', authenticateToken, async (req, res) => {
       cognitiveNotes: null
     });
 
+    // Persist user message to DB
+    memory.saveMessage(sessionId, 'user', message, source, null)
+      .catch(err => console.error('Failed to persist user message:', err));
+
     // If level 3 alert, end session immediately
     if (alertLevel === 3) {
       await alerts.createAlert({
@@ -206,11 +260,11 @@ router.post('/:sessionId/message', authenticateToken, async (req, res) => {
         message: `Critical trigger detected: "${trigger}"`
       });
 
-      // Update session in DB with alert level
       await memory.updateSession(sessionId, {
         ended_at: new Date().toISOString(),
         max_alert_level: 3
       });
+      await memory.updateSessionStatus(sessionId, 'completed');
 
       activeSessions.delete(sessionId);
 
@@ -259,6 +313,18 @@ router.post('/:sessionId/message', authenticateToken, async (req, res) => {
     };
     sessionData.messages.push(assistantMessage);
 
+    // Persist assistant message to DB
+    memory.saveMessage(sessionId, 'assistant', claudeResponse.message, 'chat', claudeResponse.phase)
+      .catch(err => console.error('Failed to persist assistant message:', err));
+
+    // Update phase in DB if changed
+    if (claudeResponse.phase) {
+      memory.updateSessionStatus(sessionId, 'active', {
+        current_phase: claudeResponse.phase,
+        last_active_at: new Date().toISOString()
+      }).catch(err => console.error('Failed to update phase:', err));
+    }
+
     // Fire async language analysis (don't await in response path)
     languageAgent.analyze(message, sessionData.studentProfile.languages?.[0] || 'en').then(analysis => {
       if (analysis) {
@@ -279,9 +345,8 @@ router.post('/:sessionId/message', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check session duration
-    const elapsedMinutes = (Date.now() - sessionData.startedAt) / 60000;
-    const sessionEnded = elapsedMinutes > MAX_SESSION_DURATION_MINUTES;
+    // Check if session ended by Claude
+    const sessionEnded = claudeResponse.session_ended || false;
 
     res.json({
       message: claudeResponse.message,
@@ -289,11 +354,10 @@ router.post('/:sessionId/message', authenticateToken, async (req, res) => {
       alertLevel: alertLevel || 0,
       fieldFeedback: claudeResponse.fieldFeedback || null,
       languageSwitchTo: claudeResponse.languageSwitchTo || null,
-      session_ended: sessionEnded,
-      session_time_remaining: Math.max(0, MAX_SESSION_DURATION_MINUTES - elapsedMinutes)
+      session_ended: sessionEnded
     });
 
-    // Auto-end if exceeded max duration
+    // Auto-end if Claude signaled completion
     if (sessionEnded) {
       await endSessionInternal(sessionId, sessionData);
     }
@@ -323,7 +387,7 @@ router.post('/:sessionId/casefile', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Session not found or expired' });
     }
 
-    // Save to casefile
+    // Save to casefile in memory
     sessionData.casefile[field] = content;
 
     // Send to tutor for evaluation
@@ -362,6 +426,265 @@ router.post('/:sessionId/casefile', authenticateToken, async (req, res) => {
 });
 
 /**
+ * PATCH /:sessionId/casefile
+ * Auto-save a single casefile field (debounced from frontend)
+ * Body: { field: 'given'|'problem'|'solution'|'explanation', content: string }
+ */
+router.patch('/:sessionId/casefile', authenticateToken, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { field, content } = req.body;
+
+    if (!field || !['given', 'problem', 'solution', 'explanation'].includes(field)) {
+      return res.status(400).json({ error: 'Invalid field' });
+    }
+
+    // Update in-memory if session is active
+    const sessionData = activeSessions.get(sessionId);
+    if (sessionData) {
+      sessionData.casefile[field] = content;
+    }
+
+    // Persist to DB
+    const casefileUpdate = {};
+    casefileUpdate[field] = content;
+    await memory.updateSession(sessionId, { casefile: casefileUpdate });
+
+    // Update last_active_at
+    memory.updateSessionStatus(sessionId, 'active', {
+      last_active_at: new Date().toISOString()
+    }).catch(() => {});
+
+    res.json({ saved: true });
+  } catch (error) {
+    console.error('Casefile auto-save error:', error);
+    res.status(500).json({ error: 'Failed to save casefile field' });
+  }
+});
+
+/**
+ * POST /:sessionId/pause
+ * Pause the session (tab close, idle, navigate away)
+ * Body: { elapsed_seconds: number }
+ */
+router.post('/:sessionId/pause', authenticateToken, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { elapsed_seconds } = req.body;
+
+    // Save casefile from memory to DB before pausing
+    const sessionData = activeSessions.get(sessionId);
+    if (sessionData) {
+      await memory.updateSession(sessionId, {
+        casefile: sessionData.casefile,
+        language_analysis: sessionData.languageAnalysisData
+      });
+    }
+
+    await memory.updateSessionStatus(sessionId, 'paused', {
+      elapsed_seconds: elapsed_seconds || 0,
+      last_active_at: new Date().toISOString()
+    });
+
+    // Remove from hot cache (save memory) — will rehydrate on resume
+    activeSessions.delete(sessionId);
+
+    res.json({ paused: true });
+  } catch (error) {
+    console.error('Session pause error:', error);
+    res.status(500).json({ error: 'Failed to pause session' });
+  }
+});
+
+/**
+ * GET /:sessionId/resume
+ * Get all data needed to resume a paused session
+ */
+router.get('/:sessionId/resume', authenticateToken, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    // Get session from DB
+    const session = await memory.getSessionById(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    if (session.status !== 'paused' && session.status !== 'active') {
+      return res.status(400).json({ error: 'Session cannot be resumed', status: session.status });
+    }
+
+    // Get messages and case template
+    const [messages, caseTemplate] = await Promise.all([
+      memory.getSessionMessages(sessionId),
+      memory.getCaseTemplate(session.case_template_id)
+    ]);
+
+    res.json({
+      session: {
+        id: session.id,
+        status: session.status,
+        current_phase: session.current_phase || 'warmup',
+        elapsed_seconds: session.elapsed_seconds || 0,
+        case_template_id: session.case_template_id,
+        started_at: session.started_at
+      },
+      messages: messages.map(m => ({
+        role: m.role,
+        content: m.content,
+        source: m.source,
+        phase: m.phase,
+        created_at: m.created_at
+      })),
+      casefile: {
+        given: session.casefile_given || '',
+        problem: session.casefile_problem || '',
+        solution: session.casefile_solution || '',
+        explanation: session.casefile_explanation || ''
+      },
+      case_template: {
+        id: caseTemplate.id,
+        title: caseTemplate.title,
+        narrative: caseTemplate.narrative,
+        plan_prompt: caseTemplate.plan_prompt,
+        explain_language: caseTemplate.explain_language
+      }
+    });
+  } catch (error) {
+    console.error('Session resume GET error:', error);
+    res.status(500).json({ error: 'Failed to get session data for resume' });
+  }
+});
+
+/**
+ * POST /:sessionId/resume
+ * Activate a paused session and get a welcome-back message from Claude
+ */
+router.post('/:sessionId/resume', authenticateToken, async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    // Rehydrate session into memory
+    const sessionData = await rehydrateSession(sessionId);
+    if (!sessionData) {
+      return res.status(404).json({ error: 'Session not found or cannot be resumed' });
+    }
+
+    // Update status to active
+    await memory.updateSessionStatus(sessionId, 'active', {
+      last_active_at: new Date().toISOString()
+    });
+
+    // Generate welcome-back message from Claude
+    let greeting;
+    try {
+      const resumeContext = `The student has returned after leaving. They were working on "${sessionData.caseTemplate.title}" in the ${sessionData.currentPhase || 'warmup'} phase. Their case file has: Given: "${sessionData.casefile.given || '(empty)'}". Pick up naturally where you left off — don't re-introduce the case.`;
+
+      const response = await tutor.chat({
+        systemPrompt: sessionData.systemPrompt,
+        messages: [
+          ...sessionData.messages,
+          { role: 'user', content: resumeContext }
+        ],
+        caseFile: sessionData.casefile,
+        currentPhase: sessionData.currentPhase,
+        studentProfile: sessionData.studentProfile
+      });
+
+      greeting = response.message;
+
+      // Add to messages
+      sessionData.messages.push({
+        role: 'assistant',
+        content: greeting,
+        phase: response.phase,
+        alertLevel: 0,
+        cognitiveNotes: response.cognitiveNotes
+      });
+
+      // Persist
+      await memory.saveMessage(sessionId, 'assistant', greeting, 'chat', response.phase);
+    } catch (error) {
+      console.error('Resume greeting error:', error);
+      greeting = 'Welcome back! Ready to pick up where we left off?';
+      sessionData.messages.push({ role: 'assistant', content: greeting, phase: null });
+      await memory.saveMessage(sessionId, 'assistant', greeting, 'chat', null);
+    }
+
+    res.json({ greeting });
+  } catch (error) {
+    console.error('Session resume POST error:', error);
+    res.status(500).json({ error: 'Failed to resume session' });
+  }
+});
+
+/**
+ * Rehydrate a session from DB into the in-memory activeSessions Map
+ * Used when: server restarted, session was paused and is being resumed, etc.
+ */
+async function rehydrateSession(sessionId) {
+  try {
+    const session = await memory.getSessionById(sessionId);
+    if (!session || (session.status !== 'active' && session.status !== 'paused')) {
+      return null;
+    }
+
+    // Load student profile
+    const studentProfile = await memory.getStudentProfile(session.student_id);
+    const skillMap = await memory.getSkillMap(session.student_id);
+    studentProfile.skill_map = skillMap;
+
+    // Load case template
+    const caseTemplate = await memory.getCaseTemplate(session.case_template_id);
+
+    // Load messages from DB
+    const dbMessages = await memory.getSessionMessages(sessionId);
+
+    // Rebuild system prompt
+    const systemPrompt = buildSystemPrompt(studentProfile, caseTemplate, {
+      sessionStartTime: session.started_at,
+      isResumed: true,
+      currentPhase: session.current_phase
+    });
+
+    // Convert DB messages to in-memory format
+    const messages = dbMessages.map(m => ({
+      role: m.role,
+      content: m.content,
+      source: m.source || 'chat',
+      phase: m.phase,
+      alertLevel: 0,
+      cognitiveNotes: null
+    }));
+
+    const sessionData = {
+      systemPrompt,
+      studentId: session.student_id,
+      studentProfile,
+      caseTemplate,
+      startedAt: new Date(session.started_at).getTime(),
+      mode: 'detective',
+      messages,
+      casefile: {
+        given: session.casefile_given || null,
+        problem: session.casefile_problem || null,
+        solution: session.casefile_solution || null,
+        explanation: session.casefile_explanation || null
+      },
+      currentPhase: session.current_phase || 'warmup',
+      languageAnalysisData: session.language_analysis || {},
+      elapsedAtPause: session.elapsed_seconds || 0
+    };
+
+    activeSessions.set(sessionId, sessionData);
+    return sessionData;
+  } catch (error) {
+    console.error('Error rehydrating session:', error);
+    return null;
+  }
+}
+
+/**
  * Internal helper to end a session
  */
 async function endSessionInternal(sessionId, sessionData) {
@@ -387,6 +710,8 @@ async function endSessionInternal(sessionId, sessionData) {
       max_alert_level: sessionData.maxAlertLevel || 0
     });
 
+    await memory.updateSessionStatus(sessionId, 'completed');
+
     // Clean up active session
     activeSessions.delete(sessionId);
   } catch (error) {
@@ -407,6 +732,16 @@ router.post('/:sessionId/end', authenticateToken, async (req, res) => {
     // Get active session
     const sessionData = activeSessions.get(sessionId);
     if (!sessionData) {
+      // Try to end a paused session
+      const dbSession = await memory.getSessionById(sessionId);
+      if (dbSession && (dbSession.status === 'paused' || dbSession.status === 'active')) {
+        await memory.updateSession(sessionId, {
+          ended_at: new Date().toISOString(),
+          edit_log: editLog || []
+        });
+        await memory.updateSessionStatus(sessionId, 'completed');
+        return res.json({ session_id: sessionId, ended_at: new Date().toISOString() });
+      }
       return res.status(404).json({ error: 'Session not found or expired' });
     }
 
@@ -433,6 +768,8 @@ router.post('/:sessionId/end', authenticateToken, async (req, res) => {
       max_alert_level: sessionData.maxAlertLevel || 0
     });
 
+    await memory.updateSessionStatus(sessionId, 'completed');
+
     // Clean up active session
     activeSessions.delete(sessionId);
 
@@ -456,7 +793,7 @@ router.get('/:sessionId', authenticateToken, async (req, res) => {
   try {
     const { sessionId } = req.params;
 
-    // Check if session is active
+    // Check if session is active in memory
     const activeSession = activeSessions.get(sessionId);
     if (activeSession) {
       const elapsedMinutes = (Date.now() - activeSession.startedAt) / 60000;
@@ -467,7 +804,6 @@ router.get('/:sessionId', authenticateToken, async (req, res) => {
         message_count: activeSession.messages.length,
         started_at: new Date(activeSession.startedAt).toISOString(),
         elapsed_minutes: Math.round(elapsedMinutes),
-        time_remaining: Math.max(0, MAX_SESSION_DURATION_MINUTES - elapsedMinutes),
         case: activeSession.caseTemplate
       });
     }
@@ -480,7 +816,7 @@ router.get('/:sessionId', authenticateToken, async (req, res) => {
 
     res.json({
       id: dbSession.id,
-      status: 'ended',
+      status: dbSession.status || 'ended',
       started_at: dbSession.started_at,
       ended_at: dbSession.ended_at,
       duration_minutes: dbSession.duration_minutes,

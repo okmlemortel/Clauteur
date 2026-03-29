@@ -105,6 +105,53 @@ export interface SessionMessage {
   timestamp: string;
 }
 
+// Session list types
+export interface SessionListItem {
+  id: string;
+  status: 'active' | 'paused' | 'completed' | 'abandoned';
+  current_phase: string;
+  elapsed_seconds: number;
+  started_at: string;
+  last_active_at: string;
+  case_templates?: {
+    id: string;
+    title: string;
+    narrative?: string;
+    plan_prompt?: string;
+    explain_language?: 'en' | 'fr';
+  };
+}
+
+export interface SessionListResponse {
+  resumable: SessionListItem[];
+  completed: SessionListItem[];
+}
+
+export interface ResumeDataResponse {
+  session: {
+    id: string;
+    status: string;
+    current_phase: string;
+    elapsed_seconds: number;
+    case_template_id: string;
+    started_at: string;
+  };
+  messages: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    source: string;
+    phase: string | null;
+    created_at: string;
+  }>;
+  casefile: {
+    given: string;
+    problem: string;
+    solution: string;
+    explanation: string;
+  };
+  case_template: CaseTemplate;
+}
+
 export const api = {
   // Auth
   login: async (code: string) => {
@@ -255,6 +302,53 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ read: true }),
     });
+    return data;
+  },
+
+  // Session persistence endpoints
+  getSessionList: async (): Promise<SessionListResponse> => {
+    const data = await makeRequest<SessionListResponse>('/session/list');
+    return data;
+  },
+
+  getResumeData: async (sessionId: string): Promise<ResumeDataResponse> => {
+    const data = await makeRequest<ResumeDataResponse>(
+      `/session/${sessionId}/resume`
+    );
+    return data;
+  },
+
+  resumeSession: async (sessionId: string): Promise<{ greeting: string }> => {
+    const data = await makeRequest<{ greeting: string }>(
+      `/session/${sessionId}/resume`,
+      { method: 'POST', body: JSON.stringify({}) }
+    );
+    return data;
+  },
+
+  pauseSession: async (sessionId: string, elapsedSeconds: number): Promise<{ paused: boolean }> => {
+    const data = await makeRequest<{ paused: boolean }>(
+      `/session/${sessionId}/pause`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ elapsed_seconds: elapsedSeconds }),
+      }
+    );
+    return data;
+  },
+
+  updateCaseFile: async (
+    sessionId: string,
+    field: 'given' | 'problem' | 'solution' | 'explanation',
+    content: string
+  ): Promise<{ saved: boolean }> => {
+    const data = await makeRequest<{ saved: boolean }>(
+      `/session/${sessionId}/casefile`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ field, content }),
+      }
+    );
     return data;
   },
 };

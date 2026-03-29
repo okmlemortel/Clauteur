@@ -27,6 +27,7 @@ interface WorkspacePanelProps {
     explanation: string;
   };
   explainLanguage?: 'en' | 'fr';
+  sessionId?: string;
 }
 
 /**
@@ -72,6 +73,7 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
     explanation: '',
   },
   explainLanguage = 'en',
+  sessionId,
 }) => {
   const visualComponentType = useMemo(
     () => caseData?.visual_component ?? null,
@@ -105,6 +107,7 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({
               voiceTranscript={voiceTranscript}
               voiceTargetField={voiceTargetField}
               caseFileContent={caseFileContent}
+              sessionId={sessionId}
             />
           </>
         ) : (

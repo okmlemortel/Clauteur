@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo, useCallback } from 'react';
 import { editTracker } from '@/lib/editTracker';
+import { api } from '@/lib/api';
 
 interface CaseFileProps {
   caseTitle: string;
@@ -21,6 +22,7 @@ interface CaseFileProps {
     solution: string;
     explanation: string;
   };
+  sessionId?: string;
 }
 
 interface FieldConfig {
@@ -50,6 +52,7 @@ export const CaseFile: React.FC<CaseFileProps> = ({
     solution: '',
     explanation: '',
   },
+  sessionId,
 }) => {
   const textareaRefs = useRef<{
     given: HTMLTextAreaElement | null;
@@ -62,6 +65,34 @@ export const CaseFile: React.FC<CaseFileProps> = ({
     solution: null,
     explanation: null,
   });
+
+  // Debounced auto-save: save each field to backend 2s after last keystroke
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const debouncedSave = useCallback(
+    (field: 'given' | 'problem' | 'solution' | 'explanation', content: string) => {
+      if (!sessionId) return;
+
+      // Clear existing timer for this field
+      if (saveTimers.current[field]) {
+        clearTimeout(saveTimers.current[field]);
+      }
+
+      saveTimers.current[field] = setTimeout(() => {
+        api.updateCaseFile(sessionId, field, content).catch((err) => {
+          console.error(`Auto-save failed for ${field}:`, err);
+        });
+      }, 2000);
+    },
+    [sessionId]
+  );
+
+  // Clean up timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(saveTimers.current).forEach(clearTimeout);
+    };
+  }, []);
 
   // Auto-grow textareas
   const autoGrowTextarea = (textarea: HTMLTextAreaElement | null) => {
@@ -118,6 +149,7 @@ export const CaseFile: React.FC<CaseFileProps> = ({
       editTracker.trackKeystroke(field, value.length);
     }
     onFieldChange(field, value);
+    debouncedSave(field, value);
   };
 
   const handleFieldFocus = (field: 'given' | 'problem' | 'solution' | 'explanation') => {

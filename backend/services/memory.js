@@ -378,6 +378,128 @@ async function getSessionById(sessionId) {
   return data;
 }
 
+/**
+ * Save a single message to session_messages table
+ */
+async function saveMessage(sessionId, role, content, source = 'chat', phase = null) {
+  const { error } = await supabase
+    .from('session_messages')
+    .insert({
+      session_id: sessionId,
+      role,
+      content,
+      source,
+      phase
+    });
+
+  if (error) {
+    console.error('Error saving message:', error);
+    // Don't throw — message save failure shouldn't break the session
+  }
+}
+
+/**
+ * Get all messages for a session (ordered by created_at)
+ */
+async function getSessionMessages(sessionId) {
+  const { data, error } = await supabase
+    .from('session_messages')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching session messages:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Get active or paused sessions for a student
+ */
+async function getResumableSessions(studentId) {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*, case_templates(id, title, narrative, plan_prompt, explain_language)')
+    .eq('student_id', studentId)
+    .in('status', ['active', 'paused'])
+    .order('last_active_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching resumable sessions:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Get completed sessions for a student
+ */
+async function getCompletedSessions(studentId, limit = 10) {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select('*, case_templates(id, title)')
+    .eq('student_id', studentId)
+    .in('status', ['completed', 'abandoned'])
+    .order('started_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error fetching completed sessions:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * Update session status (pause, resume, etc.)
+ */
+async function updateSessionStatus(sessionId, status, extraFields = {}) {
+  const updateData = { status, ...extraFields };
+  if (status === 'active') {
+    updateData.last_active_at = new Date().toISOString();
+  }
+
+  const { data, error } = await supabase
+    .from('sessions')
+    .update(updateData)
+    .eq('id', sessionId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating session status:', error);
+    throw { status: 500, message: 'Failed to update session status' };
+  }
+
+  return data;
+}
+
+/**
+ * Auto-abandon sessions paused for >24 hours
+ */
+async function abandonStaleSessions(studentId) {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('sessions')
+    .update({ status: 'abandoned', ended_at: new Date().toISOString() })
+    .eq('student_id', studentId)
+    .eq('status', 'paused')
+    .lt('last_active_at', cutoff)
+    .select();
+
+  if (error) {
+    console.error('Error abandoning stale sessions:', error);
+  }
+
+  return data || [];
+}
+
 module.exports = {
   getStudentProfile,
   getLastSessions,
@@ -392,5 +514,11 @@ module.exports = {
   getSkillMap,
   updateSkillScore,
   getCaseTemplates,
-  getCaseTemplate
+  getCaseTemplate,
+  saveMessage,
+  getSessionMessages,
+  getResumableSessions,
+  getCompletedSessions,
+  updateSessionStatus,
+  abandonStaleSessions
 };

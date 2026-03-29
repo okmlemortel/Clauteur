@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { editTracker } from '@/lib/editTracker';
 import { api } from '@/lib/api';
 
@@ -89,8 +89,9 @@ export const CaseFile: React.FC<CaseFileProps> = ({
 
   // Clean up timers on unmount
   useEffect(() => {
+    const timers = saveTimers.current;
     return () => {
-      Object.values(saveTimers.current).forEach(clearTimeout);
+      Object.values(timers).forEach(clearTimeout);
     };
   }, []);
 
@@ -172,6 +173,7 @@ export const CaseFile: React.FC<CaseFileProps> = ({
         handleFieldChange(field, newContent);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voiceTranscript, isVoiceActive, voiceTargetField]);
 
   return (

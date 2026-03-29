@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { api, SessionMessage, CaseTemplate } from '@/lib/api';
@@ -16,6 +16,18 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/a
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export default function SessionPage() {
+  return (
+    <Suspense fallback={
+      <div className="h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-slate-600">Loading session...</div>
+      </div>
+    }>
+      <SessionPageInner />
+    </Suspense>
+  );
+}
+
+function SessionPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resumeSessionId = searchParams.get('resume');
@@ -79,6 +91,7 @@ export default function SessionPage() {
         startNewSession();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, sessionId, resumeSessionId]);
 
   // ===== AUTO-PAUSE: beforeunload =====

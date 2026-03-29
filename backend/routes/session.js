@@ -106,12 +106,12 @@ router.post('/start', authenticateToken, async (req, res) => {
       language_analysis: {}
     });
 
-    // Set new persistence columns
-    await memory.updateSessionStatus(sessionData.id, 'active', {
+    // Set new persistence columns (non-blocking — columns may not exist pre-migration)
+    memory.updateSessionStatus(sessionData.id, 'active', {
       current_phase: 'warmup',
       last_active_at: new Date().toISOString(),
       elapsed_seconds: 0
-    });
+    }).catch(err => console.warn('[session/start] Status update skipped (migration pending?):', err.message));
 
     lastStep = 7;
     console.log('[session/start] Step 7: session created:', sessionData.id);
@@ -173,14 +173,14 @@ router.post('/start', authenticateToken, async (req, res) => {
       languageAnalysisData: {}
     });
 
-    // Persist the greeting message to DB
-    await memory.saveMessage(
+    // Persist the greeting message to DB (non-blocking — table may not exist pre-migration)
+    memory.saveMessage(
       sessionData.id,
       'assistant',
       initialGreeting.message,
       'chat',
       initialGreeting.phase
-    );
+    ).catch(err => console.warn('[session/start] Message save skipped:', err.message));
 
     res.status(201).json({
       session_id: sessionData.id,

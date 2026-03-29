@@ -210,6 +210,9 @@ export default function SessionPage() {
   };
 
   const handleVoiceToggle = async () => {
+    // Guard: don't toggle while a message is being sent
+    if (isLoading) return;
+
     if (isVoiceRecording) {
       // Stop recording
       deepgramClient.stopRecording();
@@ -354,7 +357,7 @@ export default function SessionPage() {
                 End Session
               </button>
             </div>
-            {startTime && <SessionTimer startTime={startTime} maxMinutes={20} />}
+            {startTime && <SessionTimer startTime={startTime} />}
           </div>
         </div>
 

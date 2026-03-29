@@ -16,6 +16,7 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({
   return (
     <div className="flex items-center gap-2">
       <button
+        type="button"
         onClick={onToggle}
         disabled={disabled}
         className={`p-3 rounded-full transition-all ${

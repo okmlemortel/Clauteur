@@ -70,7 +70,7 @@ export const CaseFile: React.FC<CaseFileProps> = ({
     textarea.style.height = Math.max(textarea.scrollHeight, 80) + 'px';
   };
 
-  // Determine field locks based on phase
+  // Field config — all fields always editable (Claude guides flow via conversation)
   const getFieldConfig = (): FieldConfig[] => {
     const baseFields: FieldConfig[] = [
       {
@@ -78,32 +78,32 @@ export const CaseFile: React.FC<CaseFileProps> = ({
         label: 'GIVEN',
         borderColor: '#1D9E75',
         question: 'What do I know?',
-        locked: currentPhase === 'solve' || currentPhase === 'explain',
-        readOnly: currentPhase === 'solve' || currentPhase === 'explain',
+        locked: false,
+        readOnly: false,
       },
       {
         key: 'problem',
         label: 'PROBLEM',
         borderColor: '#7F77DD',
         question: 'What am I looking for?',
-        locked: currentPhase === 'solve' || currentPhase === 'explain',
-        readOnly: currentPhase === 'solve' || currentPhase === 'explain',
+        locked: false,
+        readOnly: false,
       },
       {
         key: 'solution',
         label: 'SOLUTION',
         borderColor: '#BA7517',
         question: 'How do I get there?',
-        locked: currentPhase === 'plan' || currentPhase === 'warmup' || currentPhase === 'explain',
-        readOnly: currentPhase === 'plan' || currentPhase === 'warmup' || currentPhase === 'explain',
+        locked: false,
+        readOnly: false,
       },
       {
         key: 'explanation',
         label: 'EXPLANATION',
         borderColor: '#D85A30',
         question: explainLanguage === 'en' ? 'Explain your answer' : 'Explique ta réponse',
-        locked: currentPhase !== 'explain',
-        readOnly: currentPhase !== 'explain',
+        locked: false,
+        readOnly: false,
       },
     ];
     return baseFields;
@@ -152,7 +152,7 @@ export const CaseFile: React.FC<CaseFileProps> = ({
         <p className="text-sm text-slate-600 leading-relaxed">
           {narrative}
         </p>
-        {currentPhase === 'plan' && planPrompt && (
+        {planPrompt && (
           <p className="text-sm text-teal-700 bg-teal-50 rounded p-3 mt-3">
             {planPrompt}
           </p>
@@ -163,31 +163,15 @@ export const CaseFile: React.FC<CaseFileProps> = ({
       <div className="space-y-4 flex-1">
         {fields.map((field) => {
           const fieldContent = caseFileContent[field.key];
-          const isActive = !field.readOnly;
           const isVoiceTarget = voiceTargetField === field.key && isVoiceActive;
 
           return (
             <div key={field.key} className="flex flex-col gap-2">
               {/* Label with lock icon for locked fields */}
               <label
-                className={`text-xs font-semibold uppercase tracking-wide flex items-center gap-2 ${
-                  isActive ? 'text-slate-900' : 'text-slate-900'
-                }`}
+                className="text-xs font-semibold uppercase tracking-wide flex items-center gap-2 text-slate-900"
               >
                 <span>{field.label}</span>
-                {field.locked && (
-                  <svg
-                    className="w-3 h-3 text-slate-400"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                )}
               </label>
 
               {/* Textarea with colored left border */}
@@ -196,27 +180,14 @@ export const CaseFile: React.FC<CaseFileProps> = ({
                   if (el) textareaRefs.current[field.key] = el;
                 }}
                 value={fieldContent}
-                onChange={(e) => {
-                  if (!field.readOnly) {
-                    handleFieldChange(field.key, e.target.value);
-                  }
-                }}
-                onFocus={() => !field.readOnly && handleFieldFocus(field.key)}
-                onBlur={() => !field.readOnly && handleFieldBlur(field.key)}
+                onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                onFocus={() => handleFieldFocus(field.key)}
+                onBlur={() => handleFieldBlur(field.key)}
                 placeholder={field.question}
-                disabled={field.readOnly}
-                className={`w-full min-h-20 px-4 py-3 rounded border-l-4 transition-all resize-none focus:outline-none ${
-                  isActive
-                    ? 'bg-white border-slate-200 shadow-sm focus:shadow-md focus:ring-2 focus:ring-teal-500/20 cursor-text'
-                    : 'bg-slate-50 border-slate-200 text-slate-900 cursor-not-allowed'
-                } ${
+                className={`w-full min-h-20 px-4 py-3 rounded border-l-4 transition-all resize-none focus:outline-none bg-white border-slate-200 shadow-sm focus:shadow-md focus:ring-2 focus:ring-teal-500/20 cursor-text ${
                   isVoiceTarget ? 'ring-4 ring-blue-400/50' : ''
                 }`}
-                style={
-                  isActive || field.readOnly
-                    ? { borderLeftColor: field.borderColor }
-                    : { borderLeftColor: field.borderColor }
-                }
+                style={{ borderLeftColor: field.borderColor }}
               />
 
               {/* Feedback (if any) */}

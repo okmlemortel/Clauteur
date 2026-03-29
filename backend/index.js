@@ -65,40 +65,6 @@ app.get('/api/diag', async (req, res) => {
   }
 });
 
-// Diagnostic: test Claude API directly
-app.get('/api/diag/claude', async (req, res) => {
-  try {
-    const Anthropic = require('@anthropic-ai/sdk');
-    const key = process.env.ANTHROPIC_API_KEY;
-    if (!key) {
-      return res.json({ error: 'ANTHROPIC_API_KEY not set', keyLength: 0 });
-    }
-    res.json({ keyPrefix: key.substring(0, 10) + '...', keyLength: key.length, testing: true });
-    // Don't actually call the API in the response — just test the client creation
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/api/diag/claude-test', async (req, res) => {
-  try {
-    const Anthropic = require('@anthropic-ai/sdk');
-    const key = process.env.ANTHROPIC_API_KEY;
-    if (!key) {
-      return res.json({ error: 'No API key' });
-    }
-    const client = new Anthropic({ apiKey: key });
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 50,
-      messages: [{ role: 'user', content: 'Say hello in one word.' }]
-    });
-    res.json({ success: true, response: response.content[0]?.text });
-  } catch (e) {
-    res.status(500).json({ error: e.message, type: e.constructor?.name, status: e.status });
-  }
-});
-
 // Diagnostic: LLM provider status
 app.get('/api/diag/llm', async (req, res) => {
   try {
@@ -114,52 +80,6 @@ app.get('/api/diag/llm', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
-});
-
-// Diagnostic: raw Ollama connectivity test
-app.get('/api/diag/ollama-raw', async (req, res) => {
-  const url = process.env.OLLAMA_URL || 'http://model_dock.railway.internal:11434';
-  const results = {};
-
-  // Test 1: DNS resolution
-  try {
-    const dns = require('dns');
-    const hostname = new URL(url).hostname;
-    results.hostname = hostname;
-    const addresses = await new Promise((resolve, reject) => {
-      dns.lookup(hostname, { all: true }, (err, addrs) => err ? reject(err) : resolve(addrs));
-    });
-    results.dns = { status: 'ok', addresses };
-  } catch (e) {
-    results.dns = { status: 'error', error: e.message, code: e.code };
-  }
-
-  // Test 2: fetch /api/tags
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const resp = await fetch(`${url}/api/tags`, { signal: controller.signal });
-    clearTimeout(timeout);
-    const data = await resp.json();
-    results.api_tags = { status: 'ok', http_status: resp.status, models: data.models?.map(m => m.name) || [] };
-  } catch (e) {
-    results.api_tags = { status: 'error', error: e.message, cause: e.cause?.message || null, code: e.cause?.code || null };
-  }
-
-  // Test 3: fetch / (root)
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const resp = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
-    const text = await resp.text();
-    results.root = { status: 'ok', http_status: resp.status, body: text.substring(0, 100) };
-  } catch (e) {
-    results.root = { status: 'error', error: e.message, cause: e.cause?.message || null };
-  }
-
-  results.ollama_url_env = url;
-  res.json(results);
 });
 
 // Setup WebSocket for voice

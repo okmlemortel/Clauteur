@@ -5,11 +5,11 @@
  * per-role configuration via environment variables.
  *
  * Roles:
- *   - tutor        → main tutoring agent (default: ollama)
- *   - language_agent → linguistic analysis (default: ollama)
+ *   - tutor        → main tutoring agent (default: claude — fast, interactive)
+ *   - language_agent → linguistic analysis (default: ollama — async, latency-tolerant)
  *
  * Env vars:
- *   TUTOR_PROVIDER        = claude | ollama   (default: ollama)
+ *   TUTOR_PROVIDER        = claude | ollama   (default: claude)
  *   LANGUAGE_PROVIDER      = claude | ollama   (default: ollama)
  *   OLLAMA_URL             = http://ollama.railway.internal:11434  (Railway internal)
  *   OLLAMA_TUTOR_MODEL     = qwen3.5:9b        (default)
@@ -42,7 +42,7 @@ const PROVIDERS = {
 
 // ─── Role → provider mapping ───────────────────────────────────────
 const ROLE_PROVIDER = {
-  tutor: (process.env.TUTOR_PROVIDER || 'ollama').toLowerCase(),
+  tutor: (process.env.TUTOR_PROVIDER || 'claude').toLowerCase(),
   language_agent: (process.env.LANGUAGE_PROVIDER || 'ollama').toLowerCase(),
 };
 
@@ -182,7 +182,7 @@ async function chatOllama(role, systemPrompt, messages, options = {}) {
  * @returns {Promise<string>} Cleaned text response from the LLM
  */
 async function chat(role, systemPrompt, messages, options = {}) {
-  const provider = ROLE_PROVIDER[role] || 'ollama';
+  const provider = ROLE_PROVIDER[role] || 'claude';
 
   console.log(`[LLM] ${role} → ${provider} (${PROVIDERS[provider]?.[role]?.model || 'unknown model'})`);
 
@@ -219,7 +219,7 @@ async function chat(role, systemPrompt, messages, options = {}) {
  * @returns {boolean}
  */
 function isProviderAvailable(role) {
-  const provider = ROLE_PROVIDER[role] || 'ollama';
+  const provider = ROLE_PROVIDER[role] || 'claude';
 
   if (provider === 'claude') {
     return !!process.env.ANTHROPIC_API_KEY;

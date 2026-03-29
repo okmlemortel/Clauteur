@@ -32,8 +32,9 @@
 **Changements** :
 - Créé `backend/services/llmProvider.js` — couche d'abstraction unifiée `chat(role, systemPrompt, messages)`
 - Providers supportés : `claude` (Anthropic SDK) et `ollama` (REST API compatible OpenAI chat)
-- **Défaut : Ollama** — `TUTOR_PROVIDER=ollama`, `LANGUAGE_PROVIDER=ollama`
-- Modèles Qwen 3.5 : tutor → `qwen3.5:9b`, language agent → `qwen3.5:4b`
+- **Config hybride** : `TUTOR_PROVIDER=claude` (rapide, interactif), `LANGUAGE_PROVIDER=ollama` (async, tolérant latence)
+- Modèles : tutor → Claude Sonnet, language agent → Qwen 3.5 `qwen3.5:4b` via Ollama
+- **Constat perf** : Qwen 9b sur Railway CPU = ~2min par réponse (trop lent pour tutoring interactif)
 - Config env vars : `OLLAMA_URL`, `OLLAMA_TUTOR_MODEL`, `OLLAMA_LANGUAGE_MODEL`
 - **Fallback automatique** : si Ollama échoue et `ANTHROPIC_API_KEY` est configurée, bascule vers Claude (Sonnet pour tutor, Haiku pour language)
 - **Nettoyage réponse** : `cleanResponse()` strip les blocs `<think>...</think>` de Qwen + les code fences markdown avant parsing JSON
@@ -45,7 +46,7 @@
 - Client Anthropic partagé (singleton) dans llmProvider
 - Fonctions utilitaires : `isProviderAvailable(role)`, `checkProvider(role)`, `getProviderInfo()`
 - Olivier a déployé Ollama (model_dock) sur Railway avec domaine privé dynamique
-**Statut** : 🟡 Code implémenté — en attente push + test E2E avec Ollama
+**Statut** : 🟡 Code implémenté — config hybride appliquée (Claude tutor + Ollama language), en attente push + test E2E
 
 ---
 
@@ -214,7 +215,7 @@
 - Le tutor agent (Sonnet) et le language agent (Haiku) tournent en parallèle
 - Voice via Deepgram WebSocket — audio jamais stocké, seulement transcriptions
 - Edit tracker capture les frappes/pauses — données pour l'analyse cognitive (Sprint 2)
-- **LLM Provider Layer** : `llmProvider.js` abstrait Claude/Ollama. Défaut = Ollama (qwen3.5:9b tutor, qwen3.5:4b language). Pour switcher vers Claude : `TUTOR_PROVIDER=claude` ou `LANGUAGE_PROVIDER=claude`. Fallback automatique Claude si Ollama tombe. Endpoint diag : `/api/diag/llm`.
+- **LLM Provider Layer** : `llmProvider.js` abstrait Claude/Ollama. **Config hybride** : tutor = Claude Sonnet (défaut), language agent = Ollama qwen3.5:4b (défaut). Qwen 9b trop lent sur Railway CPU (~2min/réponse). Fallback automatique Claude si Ollama tombe. Pour forcer Ollama tutor : `TUTOR_PROVIDER=ollama`. Endpoint diag : `/api/diag/llm`.
 
 ### Pour Claude.ai
 - Profil Olivia mis à jour : English-dominant, G/P/S framework, detective anchor
